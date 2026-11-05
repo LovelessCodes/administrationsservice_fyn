@@ -61,6 +61,10 @@ its own short-lived access tokens.
    `HttpOnly`; that is fine, the value is still visible in the developer tools.
 5. Paste the value into the integration setup form.
 
+As a fallback, open **Session storage**, select
+`oidc.user:https://accounts.forsyningslogin.dk:af-spa`, and copy the
+`refresh_token` field from the JSON value.
+
 The value may be URL-encoded. The integration decodes it automatically, so
 paste it exactly as shown.
 
