@@ -257,6 +257,27 @@ class ASFApiClient:
         )
         return data if isinstance(data, list) else []
 
+    async def async_get_product(
+        self,
+        customer: str,
+        installation: str | int,
+        category: str | None,
+        meter: str | int,
+        tariff: str | None,
+    ) -> dict[str, Any] | None:
+        """Return the detailed product, including latest meter readings."""
+        params: dict[str, Any] = {"meterId": meter}
+        if category:
+            params["category"] = category
+        if tariff:
+            params["tarifArt"] = tariff
+        data = await self._async_request(
+            f"{SELFSERVICE_API_BASE}/customers/{quote(customer, safe='')}"
+            f"/installations/{quote(str(installation), safe='')}/products",
+            params=params,
+        )
+        return data if isinstance(data, dict) else None
+
     async def async_get_consumption(
         self,
         customer: str,
@@ -303,10 +324,11 @@ class ASFApiClient:
         meter: str | int,
         installation: str | int,
         unit: str,
+        period: str = "total",
     ) -> float | None:
         """Return the lifetime total for a meter."""
         summary = await self.async_get_consumption_summary(
-            customer, estate, meter, installation, unit, "total"
+            customer, estate, meter, installation, unit, period
         )
         return as_float(summary.get("total")) if summary else None
 

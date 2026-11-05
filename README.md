@@ -99,9 +99,14 @@ If you only see Electricity, the other profiles are not linked yet.
 | `water` | Water | m³ | `water` |
 | `gas` | Gas | m³ | `gas` |
 
-The **Hot water** sensor is only created when the heating product contains a
-water-volume reading (`latestReadingsM3`). Some district heating meters only
+The **Hot water** sensor is created when the heating product detail contains
+a water-volume reading (`latestReadingsM3`). Some district heating meters only
 report energy in GJ.
+
+The integration fetches the product detail for every meter to get the latest
+reading and the available consumption filters. Water and heat products often
+expose only a lifetime `default` series; electricity exposes month/year
+series. The right series is selected automatically.
 
 All sensors use `state_class: total_increasing` and are suitable for the Home
 Assistant **Energy** and **Water** dashboards.

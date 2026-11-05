@@ -78,6 +78,7 @@ def _product_specs(product: dict[str, Any]) -> list[SensorSpec]:
     product_type = _product_type(product)
     m3_value, m3_date = reading_value(product, "latestReadingsM3")
     gj_value, gj_date = reading_value(product, "latestReadingsGJ")
+    has_m3 = "latestReadingsM3" in product
 
     if product_type == PRODUCT_EL:
         return [
@@ -102,7 +103,7 @@ def _product_specs(product: dict[str, Any]) -> list[SensorSpec]:
                 gj_date,
             )
         ]
-        if m3_value is not None:
+        if has_m3:
             specs.append(
                 SensorSpec(
                     SENSOR_HOT_WATER,
@@ -303,11 +304,38 @@ class ASFDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     continue
 
                 for product in products:
-                    product_type = _product_type(product)
                     active = _is_active_product(product)
-                    specs = _product_specs(product) if active else []
                     installation_id = product.get("installationId")
                     meter_id = product.get("meterNumber") or product.get("meterId")
+                    product_type = _product_type(product)
+
+                    # The list endpoint has no latest readings or filters.
+                    # The detail endpoint adds latestReadingsGJ/M3 and
+                    # availableFilters, which decide which periods work.
+                    if active and installation_id is not None and meter_id is not None:
+                        detail = await self._optional(
+                            self.api.async_get_product(
+                                customer_number,
+                                str(installation_id),
+                                str(product.get("category") or product_type),
+                                str(meter_id),
+                                product.get("tarifArt"),
+                            )
+                        )
+                        if detail:
+                            product = {**product, **detail}
+                            active = _is_active_product(product)
+                            installation_id = (
+                                product.get("installationId") or installation_id
+                            )
+                            meter_id = (
+                                product.get("meterNumber")
+                                or product.get("meterId")
+                                or meter_id
+                            )
+                            product_type = _product_type(product)
+
+                    specs = _product_specs(product) if active else []
                     product_info: dict[str, Any] = {
                         "product_name": product.get("productName"),
                         "product_type": product_type,
@@ -315,6 +343,11 @@ class ASFDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                         "installation_id": installation_id,
                         "meter_id": meter_id,
                         "active": active,
+                        "available_filters": product.get("availableFilters"),
+                        "latest_readings": {
+                            "gj": product.get("latestReadingsGJ"),
+                            "m3": product.get("latestReadingsM3"),
+                        },
                         "sensor_keys": [],
                     }
                     estate_info["products"].append(product_info)
@@ -389,6 +422,14 @@ class ASFDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             reading = None
             reading_date = None
 
+        filters = {
+            str(item).lower() for item in (product.get("availableFilters") or [])
+        }
+        # Products such as water and heat expose only a default lifetime
+        # series. The month/year endpoints return 404 for those.
+        default_only = filters == {"default"}
+        total_period = "default" if default_only else "total"
+
         total = await self._optional(
             self.api.async_get_total(
                 customer_number,
@@ -396,29 +437,60 @@ class ASFDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 meter_id,
                 installation_id,
                 spec.api_unit,
+                total_period,
             )
         )
-        month_total = await self._optional(
-            self.api.async_get_month(
-                customer_number,
-                estate_id,
-                meter_id,
-                installation_id,
-                spec.api_unit,
-                data_date.year,
-                data_date.month,
+        if total is None and total_period == "default":
+            # Some deployments expose only the older total period.
+            total = await self._optional(
+                self.api.async_get_total(
+                    customer_number,
+                    estate_id,
+                    meter_id,
+                    installation_id,
+                    spec.api_unit,
+                    "total",
+                )
             )
-        )
-        year_total = await self._optional(
-            self.api.async_get_year(
-                customer_number,
-                estate_id,
-                meter_id,
-                installation_id,
-                spec.api_unit,
-                data_date.year,
+        elif total is None and not filters:
+            # The detail request failed. Water and heat often only have the
+            # default lifetime series.
+            total = await self._optional(
+                self.api.async_get_total(
+                    customer_number,
+                    estate_id,
+                    meter_id,
+                    installation_id,
+                    spec.api_unit,
+                    "default",
+                )
             )
-        )
+
+        if default_only:
+            month_total = None
+            year_total = None
+        else:
+            month_total = await self._optional(
+                self.api.async_get_month(
+                    customer_number,
+                    estate_id,
+                    meter_id,
+                    installation_id,
+                    spec.api_unit,
+                    data_date.year,
+                    data_date.month,
+                )
+            )
+            year_total = await self._optional(
+                self.api.async_get_year(
+                    customer_number,
+                    estate_id,
+                    meter_id,
+                    installation_id,
+                    spec.api_unit,
+                    data_date.year,
+                )
+            )
 
         if reading is not None and reading > 0:
             value = reading
