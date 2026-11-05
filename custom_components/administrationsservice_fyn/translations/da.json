@@ -4,7 +4,7 @@
     "step": {
       "user": {
         "title": "Forbind til Administrationsservice Fyn",
-        "description": "Log ind på [{url}]({url}). Åbn browserens udviklerværktøjer, gå til **Application → Session Storage**, vælg `{storage_key}`, og kopiér feltet `refresh_token` fra JSON-værdien.\n\nDu kan også kopiere cookien `sso_refresh_token`.\n\nRefresh-tokenet byttes til et kortvarigt access-token og fornyes automatisk. Det roterer ved hver fornyelse, så brug ikke en gammel værdi.",
+        "description": "Log ind på [{url}]({url}). Åbn browserens udviklerværktøjer, gå til **Application → Session Storage**, vælg `{storage_key}`, og kopiér feltet `refresh_token` fra JSON-værdien.\n\nDu kan også kopiere cookien `sso_refresh_token`.\n\nRefresh-tokenet byttes til et kortvarigt access-token og fornyes automatisk. Det roterer ved hver fornyelse, så brug ikke en gammel værdi.\n\nKun de kundeprofiler, der er knyttet til dit ASFyn-login, læses. Hvis vand eller fjernvarme mangler, skal du først tilknytte de kundenumre i ASFyn-portalen.",
         "data": {
           "refresh_token": "Refresh-token"
         }

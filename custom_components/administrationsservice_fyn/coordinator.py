@@ -244,12 +244,19 @@ class ASFDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         data_date = dt_util.now().date()
         sensors: dict[str, dict[str, Any]] = {}
+        profiles: list[dict[str, Any]] = []
         estate_count = 0
 
         for customer in customers:
             customer_number = str(customer.get("customerNumber") or "")
             if not customer_number:
                 continue
+
+            profile: dict[str, Any] = {
+                "customer_number": customer_number,
+                "estates": [],
+            }
+            profiles.append(profile)
 
             try:
                 estates = await self.api.async_get_estates(customer_number)
@@ -264,11 +271,19 @@ class ASFDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 continue
 
             for estate in estates:
-                if not estate.get("isActive", True):
-                    continue
-
                 estate_id = estate.get("id")
                 if estate_id is None:
+                    continue
+
+                estate_info: dict[str, Any] = {
+                    "estate_id": estate_id,
+                    "estate_name": _estate_name(estate),
+                    "is_active": bool(estate.get("isActive", True)),
+                    "products": [],
+                }
+                profile["estates"].append(estate_info)
+
+                if not estate.get("isActive", True):
                     continue
 
                 estate_count += 1
@@ -288,11 +303,25 @@ class ASFDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     continue
 
                 for product in products:
-                    if not _is_active_product(product):
-                        continue
-
+                    product_type = _product_type(product)
+                    active = _is_active_product(product)
+                    specs = _product_specs(product) if active else []
                     installation_id = product.get("installationId")
                     meter_id = product.get("meterNumber") or product.get("meterId")
+                    product_info: dict[str, Any] = {
+                        "product_name": product.get("productName"),
+                        "product_type": product_type,
+                        "subscription_state": product.get("subscriptionState"),
+                        "installation_id": installation_id,
+                        "meter_id": meter_id,
+                        "active": active,
+                        "sensor_keys": [],
+                    }
+                    estate_info["products"].append(product_info)
+
+                    if not active:
+                        continue
+
                     if installation_id is None or meter_id is None:
                         _LOGGER.debug(
                             "Skipping product without meter or installation: %s",
@@ -300,7 +329,9 @@ class ASFDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                         )
                         continue
 
-                    for spec in _product_specs(product):
+                    product_info["sensor_keys"] = [spec.key for spec in specs]
+
+                    for spec in specs:
                         sensor_data = await self._fetch_sensor(
                             customer=customer,
                             customer_number=customer_number,
@@ -321,6 +352,8 @@ class ASFDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                         )
                         sensors[key] = sensor_data
 
+        _LOGGER.debug("Discovered ASF profiles: %s", profiles)
+
         if not sensors:
             raise UpdateFailed(
                 "No active electricity, heat, water or gas meters were found "
@@ -329,6 +362,7 @@ class ASFDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         return {
             "sensors": sensors,
+            "profiles": profiles,
             "customer_count": len(customers),
             "estate_count": estate_count,
             "data_date": data_date.isoformat(),

@@ -4,7 +4,7 @@
     "step": {
       "user": {
         "title": "Connect to Administrationsservice Fyn",
-        "description": "Log in at [{url}]({url}). Open the browser developer tools, go to **Application → Session Storage**, select `{storage_key}`, and copy the `refresh_token` field from the JSON value.\n\nAlternatively, copy the `sso_refresh_token` cookie.\n\nThe refresh token is exchanged for a short-lived access token and is renewed automatically. It rotates on every refresh, so do not reuse an old value.",
+        "description": "Log in at [{url}]({url}). Open the browser developer tools, go to **Application → Session Storage**, select `{storage_key}`, and copy the `refresh_token` field from the JSON value.\n\nAlternatively, copy the `sso_refresh_token` cookie.\n\nThe refresh token is exchanged for a short-lived access token and is renewed automatically. It rotates on every refresh, so do not reuse an old value.\n\nOnly the customer profiles linked to your ASFyn login are read. If water or district heating is missing, link those customer numbers in the ASFyn portal first.",
         "data": {
           "refresh_token": "Refresh token"
         }

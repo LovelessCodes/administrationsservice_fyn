@@ -57,6 +57,9 @@ async def async_get_config_entry_diagnostics(
             "customer_count": coordinator_data.get("customer_count"),
             "estate_count": coordinator_data.get("estate_count"),
             "data_date": coordinator_data.get("data_date"),
+            "profiles": async_redact_data(
+                coordinator_data.get("profiles", []), TO_REDACT
+            ),
             "sensors": [async_redact_data(item, TO_REDACT) for item in sensors],
         },
     }

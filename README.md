@@ -87,6 +87,10 @@ paste it exactly as shown.
 Sensors are created per property and per active product. Their names are
 translated (English and Danish).
 
+Sensors come from the customer profiles linked to your ASFyn login.
+Electricity, water, district heating and gas are separate customer profiles.
+If you only see Electricity, the other profiles are not linked yet.
+
 | Product | Sensor | Unit | Home Assistant device class |
 | --- | --- | --- | --- |
 | `el` | Electricity | kWh | `energy` |
@@ -101,6 +105,24 @@ report energy in GJ.
 
 All sensors use `state_class: total_increasing` and are suitable for the Home
 Assistant **Energy** and **Water** dashboards.
+
+### Water and district heating
+
+ASFyn does not discover utilities from the property address. It reads the
+customer numbers linked to your login. To add water or district heating:
+
+1. Log in at <https://www.asfyn.dk/>.
+2. Open **My EnergiFyn** → **Change customer** (the portal also exposes
+   `/select-customer/`).
+3. Choose **Add customer number**, then enter the customer number and PIN code
+   for the water/heating account. You can add several at once.
+4. In Home Assistant, open **Settings → Devices & Services →
+   Administrationsservice Fyn** and choose **Reload** (or restart Home
+   Assistant). New sensors are created during setup, not on the next poll.
+
+If you do not know the customer number or PIN, check the bill or self-service
+portal for Vandcenter Syd, Fjernvarme Fyn or the relevant utility. The ASFyn
+portal also has a customer-number lookup by address.
 
 ### Energy dashboard
 
@@ -164,6 +186,12 @@ paste a fresh `sso_refresh_token`.
 The login succeeded, but the account has no active electricity, heating, water
 or gas products. Check the products in the portal. If a product was just
 created, wait until it becomes active.
+
+### Only Electricity is shown
+
+Water, district heating and gas are separate customer profiles. Link those
+customer numbers in the ASFyn portal, then reload the integration. See
+[Water and district heating](#water-and-district-heating).
 
 ### "Could not reach the Administrationsservice Fyn API"
 
