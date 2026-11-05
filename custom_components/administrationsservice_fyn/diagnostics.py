@@ -17,8 +17,9 @@ async def async_get_config_entry_diagnostics(
     """Return diagnostics for a config entry."""
     coordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
 
+    coordinator_data = coordinator.data or {}
     sensors = []
-    for data in coordinator.data.get("sensors", {}).values():
+    for data in coordinator_data.get("sensors", {}).values():
         sensors.append(
             {
                 "sensor_key": data.get("sensor_key"),
@@ -53,9 +54,9 @@ async def async_get_config_entry_diagnostics(
             "last_exception": (
                 repr(coordinator.last_exception) if coordinator.last_exception else None
             ),
-            "customer_count": coordinator.data.get("customer_count"),
-            "estate_count": coordinator.data.get("estate_count"),
-            "data_date": coordinator.data.get("data_date"),
+            "customer_count": coordinator_data.get("customer_count"),
+            "estate_count": coordinator_data.get("estate_count"),
+            "data_date": coordinator_data.get("data_date"),
             "sensors": [async_redact_data(item, TO_REDACT) for item in sensors],
         },
     }
