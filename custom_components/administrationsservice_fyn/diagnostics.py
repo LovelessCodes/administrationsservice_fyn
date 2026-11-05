@@ -28,6 +28,7 @@ async def async_get_config_entry_diagnostics(
                 "api_unit": data.get("api_unit"),
                 "value_source": data.get("value_source"),
                 "last_reading": data.get("last_reading"),
+                "meter_reading": data.get("meter_reading"),
                 "lifetime_consumption": data.get("lifetime_consumption"),
                 "month_to_date": data.get("month_to_date"),
                 "year_to_date": data.get("year_to_date"),

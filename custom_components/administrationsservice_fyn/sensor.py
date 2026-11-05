@@ -130,6 +130,7 @@ class ASFConsumptionSensor(
             "tariff": data.get("tariff"),
             "subscription_state": data.get("subscription_state"),
             "last_reading": data.get("last_reading"),
+            "meter_reading": data.get("meter_reading"),
             "lifetime_consumption": data.get("lifetime_consumption"),
             "month_to_date": data.get("month_to_date"),
             "year_to_date": data.get("year_to_date"),

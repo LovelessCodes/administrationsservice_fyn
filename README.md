@@ -103,10 +103,18 @@ The **Hot water** sensor is created when the heating product detail contains
 a water-volume reading (`latestReadingsM3`). Some district heating meters only
 report energy in GJ.
 
-The integration fetches the product detail for every meter to get the latest
-reading and the available consumption filters. Water and heat products often
-expose only a lifetime `default` series; electricity exposes month/year
-series. The right series is selected automatically.
+The integration fetches the product detail for every meter and builds a
+cumulative consumption value from the API's three data layers:
+
+- the lifetime/base total,
+- the current year,
+- the current month (the API updates this daily, with a one-day lag).
+
+For electricity the base total is the value before the current year, so the
+sensor state is `base + year-to-date + month-to-date`. For water, heat and gas
+the lifetime total already includes the current year and month. The physical
+meter reading is exposed as the `meter_reading` attribute; it may only change
+monthly or yearly, while the consumption value updates much more often.
 
 All sensors use `state_class: total_increasing` and are suitable for the Home
 Assistant **Energy** and **Water** dashboards.
@@ -137,10 +145,19 @@ portal also has a customer-number lookup by address.
 
 ### Energy dashboard
 
-- **Electricity** → *Grid consumption*
-- **Heating** → *District heating* (GJ is supported by the Energy dashboard)
-- **Hot water** and **Water** → *Water consumption*
-- **Gas** → *Gas consumption*
+- **Electricity** → *Grid consumption*.
+- **Water** → *Water consumption*.
+- **Gas** → *Gas consumption*.
+
+Home Assistant 2026.10 has no native **district heating** energy source. A
+district heating meter can still be tracked by adding it as a **Gas** source
+and giving it a custom name such as *District heating*. The Gas dialog accepts
+energy sensors in GJ, so the value and unit are preserved.
+
+The **Hot water** sensor is the district heating circuit volume (m³), not
+domestic hot water. Do not add it to *Water consumption* alongside the cold
+water meter; that would double-count water. Use it in a statistics card or
+automation instead.
 
 ### Attributes
 
@@ -160,14 +177,15 @@ Each sensor exposes useful metadata:
 | `tariff` | Tariff code, for example `EK-30` |
 | `subscription_state` | Product subscription state |
 | `last_reading` | Date of the latest physical meter reading |
+| `meter_reading` | Latest physical meter reading |
 | `lifetime_consumption` | Lifetime consumption reported by the API |
 | `month_to_date` | Consumption for the current month |
 | `year_to_date` | Consumption for the current year |
-| `value_source` | `meter_reading` or `consumption_total` |
+| `value_source` | `cumulative_total`, `consumption_total` or `meter_reading` |
 
-For heat and water meters the sensor state is the latest physical meter
-reading when one is available, because that is the value shown in the portal.
-Otherwise the lifetime consumption total is used.
+The sensor state is cumulative consumption. The physical meter reading is the
+`meter_reading` attribute. This means the sensor can update daily even when
+the utility only publishes a new physical meter reading once a month.
 
 ## Options
 
@@ -178,8 +196,10 @@ day, so polling more often than every 15 minutes is not recommended.
 ## Data updates
 
 The integration polls the ASFyn self-service API. The API is not a real-time
-feed: values are updated when the utility receives new meter data. A manual
-**Refresh** button is available on the integration device.
+feed: values are updated when the utility receives new meter data. The
+current-month endpoint is updated daily (with a one-day lag), the year endpoint
+monthly, and the physical meter reading monthly or yearly. A manual **Refresh**
+button is available on the integration device.
 
 New meters are discovered when the integration starts. If a new product is
 added to your account, reload the integration or restart Home Assistant to

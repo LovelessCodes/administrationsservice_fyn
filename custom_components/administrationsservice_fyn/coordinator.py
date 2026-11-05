@@ -492,17 +492,28 @@ class ASFDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 )
             )
 
-        if reading is not None and reading > 0:
-            value = reading
-            source = "meter_reading"
+        product_type = _product_type(product)
+        meter_reading = as_float(reading)
+
+        if total is None and meter_reading is None:
+            return None
+
+        if product_type == PRODUCT_EL and total is not None:
+            # The electricity ``total`` endpoint is the base total from
+            # before the current year. Year-to-date covers the previous
+            # months and month-to-date covers the current month, which the
+            # API updates daily (with a one-day lag).
+            value = total + (year_total or 0.0) + (month_total or 0.0)
+            source = "cumulative_total"
         elif total is not None:
+            # Water, heat and gas totals already include the current year
+            # and month. They are cumulative consumption, not meter
+            # readings, and update more often than the physical reading.
             value = total
             source = "consumption_total"
-        elif reading is not None:
-            value = reading
-            source = "meter_reading"
         else:
-            return None
+            value = meter_reading
+            source = "meter_reading"
 
         return {
             "sensor_key": spec.key,
@@ -511,6 +522,7 @@ class ASFDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "device_class": spec.device_class,
             "icon": spec.icon,
             "value": as_float(value),
+            "meter_reading": meter_reading,
             "last_reading": reading_date,
             "lifetime_consumption": as_float(total),
             "month_to_date": as_float(month_total),
