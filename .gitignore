@@ -1,0 +1,27 @@
+# Byte-compiled / optimized files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Tooling
+.ruff_cache/
+.pytest_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# Home Assistant test configuration
+config/
+home-assistant.log
+home-assistant_v2.db
+
+# OS / editor files
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

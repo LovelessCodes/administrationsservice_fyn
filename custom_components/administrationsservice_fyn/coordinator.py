@@ -1,0 +1,427 @@
+"""Data update coordinator for Administrationsservice Fyn."""
+
+from __future__ import annotations
+
+import logging
+from dataclasses import dataclass
+from datetime import timedelta
+from typing import Any
+
+from homeassistant.components.sensor import SensorDeviceClass
+from homeassistant.config_entries import ConfigEntry
+from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import ConfigEntryAuthFailed
+from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
+from homeassistant.util import dt as dt_util
+
+from .api import (
+    ASFApiClient,
+    ASFApiError,
+    ASFAuthError,
+    as_float,
+    clean_refresh_token,
+    reading_value,
+)
+from .const import (
+    API_UNIT_GJ,
+    API_UNIT_KWH,
+    API_UNIT_M3,
+    CONF_ACCESS_TOKEN,
+    CONF_REFRESH_TOKEN,
+    CONF_SCAN_INTERVAL,
+    CONF_TOKEN_EXPIRES,
+    DEFAULT_SCAN_INTERVAL,
+    DOMAIN,
+    PRODUCT_EL,
+    PRODUCT_GAS,
+    PRODUCT_HEAT,
+    PRODUCT_WATER,
+    SENSOR_ELECTRICITY,
+    SENSOR_GAS,
+    SENSOR_HEAT,
+    SENSOR_HOT_WATER,
+    SENSOR_WATER,
+    UNIT_GJ,
+    UNIT_KWH,
+    UNIT_M3,
+)
+
+_LOGGER = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True, slots=True)
+class SensorSpec:
+    """Description of a sensor to create for a product."""
+
+    key: str
+    unit: str
+    api_unit: str
+    device_class: SensorDeviceClass | None
+    icon: str
+    reading: float | None = None
+    reading_date: str | None = None
+
+
+def _product_type(product: dict[str, Any]) -> str:
+    """Return the normalised product type."""
+    return str(
+        product.get("type")
+        or product.get("category")
+        or product.get("productType")
+        or ""
+    ).lower()
+
+
+def _product_specs(product: dict[str, Any]) -> list[SensorSpec]:
+    """Return the sensors that belong to a product."""
+    product_type = _product_type(product)
+    m3_value, m3_date = reading_value(product, "latestReadingsM3")
+    gj_value, gj_date = reading_value(product, "latestReadingsGJ")
+
+    if product_type == PRODUCT_EL:
+        return [
+            SensorSpec(
+                SENSOR_ELECTRICITY,
+                UNIT_KWH,
+                API_UNIT_KWH,
+                SensorDeviceClass.ENERGY,
+                "mdi:flash",
+            )
+        ]
+
+    if product_type == PRODUCT_HEAT:
+        specs = [
+            SensorSpec(
+                SENSOR_HEAT,
+                UNIT_GJ,
+                API_UNIT_GJ,
+                SensorDeviceClass.ENERGY,
+                "mdi:radiator",
+                gj_value,
+                gj_date,
+            )
+        ]
+        if m3_value is not None:
+            specs.append(
+                SensorSpec(
+                    SENSOR_HOT_WATER,
+                    UNIT_M3,
+                    API_UNIT_M3,
+                    SensorDeviceClass.WATER,
+                    "mdi:water-boiler",
+                    m3_value,
+                    m3_date,
+                )
+            )
+        return specs
+
+    if product_type == PRODUCT_WATER:
+        return [
+            SensorSpec(
+                SENSOR_WATER,
+                UNIT_M3,
+                API_UNIT_M3,
+                SensorDeviceClass.WATER,
+                "mdi:water",
+                m3_value,
+                m3_date,
+            )
+        ]
+
+    if product_type == PRODUCT_GAS:
+        return [
+            SensorSpec(
+                SENSOR_GAS,
+                UNIT_M3,
+                API_UNIT_M3,
+                SensorDeviceClass.GAS,
+                "mdi:fire",
+                m3_value,
+                m3_date,
+            )
+        ]
+
+    return []
+
+
+def _is_active_product(product: dict[str, Any]) -> bool:
+    """Return True if a product is still active."""
+    state = str(product.get("subscriptionState") or "").strip().lower()
+    if state and state != "active":
+        return False
+
+    today = dt_util.now().date().isoformat()
+    for key in ("toDate", "endDate"):
+        value = product.get(key)
+        if not value:
+            continue
+        text = str(value)
+        if text[:4] in ("0000", "0001"):
+            continue
+        if text[:10] < today:
+            return False
+
+    return True
+
+
+def _estate_name(estate: dict[str, Any]) -> str:
+    """Return a readable estate name."""
+    return str(
+        estate.get("name")
+        or estate.get("address")
+        or f"Estate {estate.get('id', 'unknown')}"
+    )
+
+
+class ASFDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
+    """Coordinator that fetches customers, estates, products and readings."""
+
+    def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
+        """Initialize the coordinator."""
+        scan_interval = int(
+            entry.options.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL)
+        )
+        super().__init__(
+            hass,
+            _LOGGER,
+            name=DOMAIN,
+            update_interval=timedelta(minutes=scan_interval),
+        )
+        self.entry = entry
+        self.api = ASFApiClient(
+            async_get_clientsession(hass),
+            clean_refresh_token(entry.data[CONF_REFRESH_TOKEN]),
+            entry.data.get(CONF_ACCESS_TOKEN),
+            entry.data.get(CONF_TOKEN_EXPIRES),
+            self._persist_tokens,
+        )
+
+    def _persist_tokens(
+        self, refresh_token: str, access_token: str, expires_at: float
+    ) -> None:
+        """Persist rotated tokens to the config entry."""
+        self.hass.config_entries.async_update_entry(
+            self.entry,
+            data={
+                **self.entry.data,
+                CONF_REFRESH_TOKEN: refresh_token,
+                CONF_ACCESS_TOKEN: access_token,
+                CONF_TOKEN_EXPIRES: expires_at,
+            },
+        )
+
+    async def _optional(self, awaitable: Any) -> Any:
+        """Run an optional API request and ignore non-auth failures."""
+        try:
+            return await awaitable
+        except ASFAuthError:
+            raise
+        except ASFApiError as err:
+            _LOGGER.debug("Optional API request failed: %s", err)
+            return None
+
+    async def _async_update_data(self) -> dict[str, Any]:
+        """Fetch data and convert authentication failures to reauth."""
+        try:
+            return await self._async_fetch_data()
+        except ASFAuthError as err:
+            raise ConfigEntryAuthFailed(str(err)) from err
+
+    async def _async_fetch_data(self) -> dict[str, Any]:
+        """Fetch data for every customer, estate and product."""
+        try:
+            customers = await self.api.async_get_customers()
+        except ASFAuthError:
+            raise
+        except ASFApiError as err:
+            raise UpdateFailed(str(err)) from err
+
+        if not customers:
+            raise UpdateFailed(
+                "No customers were found for this account. Check the ASF login."
+            )
+
+        data_date = dt_util.now().date()
+        sensors: dict[str, dict[str, Any]] = {}
+        estate_count = 0
+
+        for customer in customers:
+            customer_number = str(customer.get("customerNumber") or "")
+            if not customer_number:
+                continue
+
+            try:
+                estates = await self.api.async_get_estates(customer_number)
+            except ASFAuthError:
+                raise
+            except ASFApiError as err:
+                _LOGGER.warning(
+                    "Could not fetch estates for customer %s: %s",
+                    customer_number,
+                    err,
+                )
+                continue
+
+            for estate in estates:
+                if not estate.get("isActive", True):
+                    continue
+
+                estate_id = estate.get("id")
+                if estate_id is None:
+                    continue
+
+                estate_count += 1
+
+                try:
+                    products = await self.api.async_get_products(
+                        customer_number, estate_id
+                    )
+                except ASFAuthError:
+                    raise
+                except ASFApiError as err:
+                    _LOGGER.warning(
+                        "Could not fetch products for estate %s: %s",
+                        estate_id,
+                        err,
+                    )
+                    continue
+
+                for product in products:
+                    if not _is_active_product(product):
+                        continue
+
+                    installation_id = product.get("installationId")
+                    meter_id = product.get("meterNumber") or product.get("meterId")
+                    if installation_id is None or meter_id is None:
+                        _LOGGER.debug(
+                            "Skipping product without meter or installation: %s",
+                            product.get("productName"),
+                        )
+                        continue
+
+                    for spec in _product_specs(product):
+                        sensor_data = await self._fetch_sensor(
+                            customer=customer,
+                            customer_number=customer_number,
+                            estate=estate,
+                            estate_id=estate_id,
+                            product=product,
+                            installation_id=str(installation_id),
+                            meter_id=str(meter_id),
+                            spec=spec,
+                            data_date=data_date,
+                        )
+                        if sensor_data is None:
+                            continue
+
+                        key = (
+                            f"{customer_number}_{estate_id}_"
+                            f"{installation_id}_{meter_id}_{spec.key}"
+                        )
+                        sensors[key] = sensor_data
+
+        if not sensors:
+            raise UpdateFailed(
+                "No active electricity, heat, water or gas meters were found "
+                "on this account."
+            )
+
+        return {
+            "sensors": sensors,
+            "customer_count": len(customers),
+            "estate_count": estate_count,
+            "data_date": data_date.isoformat(),
+        }
+
+    async def _fetch_sensor(
+        self,
+        *,
+        customer: dict[str, Any],
+        customer_number: str,
+        estate: dict[str, Any],
+        estate_id: Any,
+        product: dict[str, Any],
+        installation_id: str,
+        meter_id: str,
+        spec: SensorSpec,
+        data_date: Any,
+    ) -> dict[str, Any] | None:
+        """Fetch totals and build the data for one sensor."""
+        if spec.reading is not None:
+            reading = spec.reading
+            reading_date = spec.reading_date
+        else:
+            reading = None
+            reading_date = None
+
+        total = await self._optional(
+            self.api.async_get_total(
+                customer_number,
+                estate_id,
+                meter_id,
+                installation_id,
+                spec.api_unit,
+            )
+        )
+        month_total = await self._optional(
+            self.api.async_get_month(
+                customer_number,
+                estate_id,
+                meter_id,
+                installation_id,
+                spec.api_unit,
+                data_date.year,
+                data_date.month,
+            )
+        )
+        year_total = await self._optional(
+            self.api.async_get_year(
+                customer_number,
+                estate_id,
+                meter_id,
+                installation_id,
+                spec.api_unit,
+                data_date.year,
+            )
+        )
+
+        if reading is not None and reading > 0:
+            value = reading
+            source = "meter_reading"
+        elif total is not None:
+            value = total
+            source = "consumption_total"
+        elif reading is not None:
+            value = reading
+            source = "meter_reading"
+        else:
+            return None
+
+        return {
+            "sensor_key": spec.key,
+            "unit": spec.unit,
+            "api_unit": spec.api_unit,
+            "device_class": spec.device_class,
+            "icon": spec.icon,
+            "value": as_float(value),
+            "last_reading": reading_date,
+            "lifetime_consumption": as_float(total),
+            "month_to_date": as_float(month_total),
+            "year_to_date": as_float(year_total),
+            "value_source": source,
+            "customer": customer,
+            "customer_number": customer_number,
+            "estate": estate,
+            "estate_id": estate_id,
+            "estate_name": _estate_name(estate),
+            "product": product,
+            "product_name": product.get("productName"),
+            "product_type": _product_type(product),
+            "installation_id": installation_id,
+            "meter_id": meter_id,
+            "meter_number": product.get("meterNumber"),
+            "customer_meter_number": product.get("customerMeterNumber"),
+            "tariff": product.get("tarifArt"),
+            "subscription_state": product.get("subscriptionState"),
+        }

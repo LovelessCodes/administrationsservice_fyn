@@ -1,0 +1,66 @@
+{
+  "config": {
+    "flow_title": "Administrationsservice Fyn",
+    "step": {
+      "user": {
+        "title": "Connect to Administrationsservice Fyn",
+        "description": "Log in at [{url}]({url}), open the developer tools of your browser, and copy the value of the `sso_refresh_token` cookie.\n\nThe refresh token is exchanged for a short-lived access token and is renewed automatically. It rotates on every refresh, so do not reuse an old value.",
+        "data": {
+          "refresh_token": "Refresh token"
+        }
+      },
+      "reauth_confirm": {
+        "title": "Reconnect Administrationsservice Fyn",
+        "description": "The stored login is no longer valid. Log in at [{url}]({url}) and paste a fresh `sso_refresh_token` cookie value.",
+        "data": {
+          "refresh_token": "Refresh token"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "The refresh token is invalid or has expired. Copy a new `sso_refresh_token` cookie and try again.",
+      "cannot_connect": "Could not reach the Administrationsservice Fyn API. Try again later.",
+      "no_customers": "The login succeeded, but no customers were found on this account.",
+      "unknown": "An unexpected error occurred. Check the Home Assistant log for details."
+    },
+    "abort": {
+      "already_configured": "This account is already configured.",
+      "reauth_successful": "Reauthentication was successful."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Administrationsservice Fyn options",
+        "description": "Choose how often consumption data is fetched. Meter readings change a few times per day, so hourly updates are usually enough.",
+        "data": {
+          "scan_interval": "Update interval (minutes)"
+        }
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "electricity": {
+        "name": "Electricity"
+      },
+      "heat": {
+        "name": "Heating"
+      },
+      "hot_water": {
+        "name": "Hot water"
+      },
+      "water": {
+        "name": "Water"
+      },
+      "gas": {
+        "name": "Gas"
+      }
+    },
+    "button": {
+      "refresh": {
+        "name": "Refresh"
+      }
+    }
+  }
+}

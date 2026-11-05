@@ -1,0 +1,13 @@
+{
+  "domain": "administrationsservice_fyn",
+  "name": "Administrationsservice Fyn",
+  "codeowners": ["@LovelessCodes"],
+  "config_flow": true,
+  "documentation": "https://github.com/LovelessCodes/administrationsservice_fyn",
+  "integration_type": "service",
+  "iot_class": "cloud_polling",
+  "issue_tracker": "https://github.com/LovelessCodes/administrationsservice_fyn/issues",
+  "loggers": ["custom_components.administrationsservice_fyn"],
+  "requirements": [],
+  "version": "1.0.0"
+}
