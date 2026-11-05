@@ -452,9 +452,9 @@ class ASFDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     "total",
                 )
             )
-        elif total is None and not filters:
-            # The detail request failed. Water and heat often only have the
-            # default lifetime series.
+        elif total is None:
+            # The detail request failed or the period is unsupported. Water
+            # and heat often only have the default lifetime series.
             total = await self._optional(
                 self.api.async_get_total(
                     customer_number,
