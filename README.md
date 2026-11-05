@@ -27,6 +27,9 @@ sensors.
 - Manual refresh button
 - Diagnostics download with tokens redacted
 
+Electricity spot prices are **not** included. This integration focuses on
+metered consumption; keep a price integration if you need hourly prices.
+
 ## Installation
 
 ### HACS (recommended)
