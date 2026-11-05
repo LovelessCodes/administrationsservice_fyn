@@ -117,7 +117,7 @@ class ASFConsumptionSensor(
         if not data:
             return {}
 
-        return {
+        attributes = {
             "customer_number": data.get("customer_number"),
             "estate_id": data.get("estate_id"),
             "estate_name": data.get("estate_name"),
@@ -137,3 +137,6 @@ class ASFConsumptionSensor(
             "value_source": data.get("value_source"),
             "api_unit": data.get("api_unit"),
         }
+        if data.get("added_months"):
+            attributes["added_months"] = data["added_months"]
+        return attributes

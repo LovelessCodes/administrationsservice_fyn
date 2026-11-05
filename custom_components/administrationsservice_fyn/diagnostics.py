@@ -32,6 +32,7 @@ async def async_get_config_entry_diagnostics(
                 "lifetime_consumption": data.get("lifetime_consumption"),
                 "month_to_date": data.get("month_to_date"),
                 "year_to_date": data.get("year_to_date"),
+                "added_months": data.get("added_months"),
                 "customer_number": data.get("customer_number"),
                 "estate_id": data.get("estate_id"),
                 "estate_name": data.get("estate_name"),

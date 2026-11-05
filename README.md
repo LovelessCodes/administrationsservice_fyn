@@ -104,17 +104,30 @@ a water-volume reading (`latestReadingsM3`). Some district heating meters only
 report energy in GJ.
 
 The integration fetches the product detail for every meter and builds a
-cumulative consumption value from the API's three data layers:
+cumulative consumption value from the API's data layers:
 
-- the lifetime/base total,
-- the current year,
-- the current month (the API updates this daily, with a one-day lag).
+- the lifetime total through the latest physical meter reading,
+- the current year-to-date,
+- the current month-to-date (the API updates this daily, with a one-day lag).
 
-For electricity the base total is the value before the current year, so the
-sensor state is `base + year-to-date + month-to-date`. For water, heat and gas
-the lifetime total already includes the current year and month. The physical
-meter reading is exposed as the `meter_reading` attribute; it may only change
-monthly or yearly, while the consumption value updates much more often.
+The lifetime total's cutoff is the latest physical reading, not always the end
+of the previous year:
+
+- If the latest reading was in a **previous year** (typical for an annual
+  district-heating meter), the state is
+  `lifetime + year-to-date + month-to-date`.
+- If the latest reading is in the **current year** (typical for a monthly
+  water meter), the lifetime already includes the year up to that reading.
+  The integration adds every full month after the reading, including the
+  current month. This keeps the value current without adding year-to-date
+  twice.
+- Electricity has no physical reading date, so it uses the
+  `base + year-to-date + month-to-date` pattern.
+
+The physical meter reading is exposed as the `meter_reading` attribute; it may
+only change monthly or yearly, while the consumption value updates much more
+often. The raw reading can include the meter's initial offset, so it is not
+the same as consumption since installation.
 
 All sensors use `state_class: total_increasing` and are suitable for the Home
 Assistant **Energy** and **Water** dashboards.
@@ -127,6 +140,14 @@ customer numbers linked to your login.
 Water billed by **Vandcenter Syd** is a separate portal
 (`vandcenter.smartforsyning.dk`) and is **not** part of ASFyn. Keep the
 Vandcenter Syd integration for that meter; ASFyn cannot expose it.
+
+If you have both integrations, they can refer to the same physical Axioma W1
+meter. The Vandcenter Syd sensor is the real-time meter reading. The ASFyn
+water product is the utility/billing view and can lag until the next monthly
+reading is posted; the integration fills in the full months that the API
+already exposes, but a month that the utility has not published yet cannot be
+recovered. Use the Vandcenter Syd sensor for the **Water** dashboard when it
+is available.
 
 To add a water or district heating account that *is* handled by ASFyn:
 
@@ -178,10 +199,11 @@ Each sensor exposes useful metadata:
 | `subscription_state` | Product subscription state |
 | `last_reading` | Date of the latest physical meter reading |
 | `meter_reading` | Latest physical meter reading |
-| `lifetime_consumption` | Lifetime consumption reported by the API |
+| `lifetime_consumption` | Lifetime consumption through the latest physical reading |
 | `month_to_date` | Consumption for the current month |
 | `year_to_date` | Consumption for the current year |
-| `value_source` | `cumulative_total`, `consumption_total` or `meter_reading` |
+| `added_months` | Month totals added after the latest physical reading |
+| `value_source` | `cumulative_total` or `meter_reading` |
 
 The sensor state is cumulative consumption. The physical meter reading is the
 `meter_reading` attribute. This means the sensor can update daily even when

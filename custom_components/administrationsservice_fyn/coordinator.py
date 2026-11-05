@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from datetime import timedelta
+from datetime import date, datetime, timedelta
 from typing import Any
 
 from homeassistant.components.sensor import SensorDeviceClass
@@ -173,6 +173,33 @@ def _estate_name(estate: dict[str, Any]) -> str:
         or estate.get("address")
         or f"Estate {estate.get('id', 'unknown')}"
     )
+
+
+def _parse_reading_date(value: str | None) -> date | None:
+    """Parse the latest physical reading date from the API."""
+    if not value:
+        return None
+    text = str(value)
+    try:
+        return datetime.fromisoformat(text).date()
+    except ValueError:
+        try:
+            return date.fromisoformat(text[:10])
+        except ValueError:
+            return None
+
+
+def _months_after(last: date, current: date) -> list[tuple[int, int]]:
+    """Return the full months after ``last`` up to and including ``current``."""
+    months: list[tuple[int, int]] = []
+    year, month = last.year, last.month
+    while (year, month) < (current.year, current.month):
+        month += 1
+        if month > 12:
+            month = 1
+            year += 1
+        months.append((year, month))
+    return months
 
 
 class ASFDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
@@ -494,26 +521,53 @@ class ASFDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         product_type = _product_type(product)
         meter_reading = as_float(reading)
+        last_reading_date = _parse_reading_date(reading_date)
+        added_months: dict[str, float] = {}
 
         if total is None and meter_reading is None:
             return None
 
-        if product_type == PRODUCT_EL and total is not None:
-            # The electricity ``total`` endpoint is the base total from
-            # before the current year. Year-to-date covers the previous
-            # months and month-to-date covers the current month, which the
-            # API updates daily (with a one-day lag).
-            value = total + (year_total or 0.0) + (month_total or 0.0)
-            source = "cumulative_total"
-        elif total is not None:
-            # Water, heat and gas totals already include the current year
-            # and month. They are cumulative consumption, not meter
-            # readings, and update more often than the physical reading.
-            value = total
-            source = "consumption_total"
-        else:
+        if total is None:
             value = meter_reading
             source = "meter_reading"
+        elif (
+            product_type == PRODUCT_EL
+            or last_reading_date is None
+            or last_reading_date.year < data_date.year
+        ):
+            # The lifetime total ends before the current year (for example,
+            # an annual heat reading on 31 December). Year-to-date covers
+            # the previous months and month-to-date covers the current
+            # month, which the API updates daily (with a one-day lag).
+            value = total + (year_total or 0.0) + (month_total or 0.0)
+            source = "cumulative_total"
+        else:
+            # The lifetime total already includes the current year up to
+            # the latest physical reading. Add every full month after that
+            # reading so a monthly water reading still produces a current
+            # cumulative value. This avoids adding year-to-date twice.
+            extra = 0.0
+            for year, month in _months_after(last_reading_date, data_date):
+                month_key = f"{year:04d}-{month:02d}"
+                if year == data_date.year and month == data_date.month:
+                    month_value = month_total
+                else:
+                    month_value = await self._optional(
+                        self.api.async_get_month(
+                            customer_number,
+                            estate_id,
+                            meter_id,
+                            installation_id,
+                            spec.api_unit,
+                            year,
+                            month,
+                        )
+                    )
+                if month_value is not None:
+                    added_months[month_key] = as_float(month_value)
+                    extra += month_value
+            value = total + extra
+            source = "cumulative_total"
 
         return {
             "sensor_key": spec.key,
@@ -527,6 +581,7 @@ class ASFDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "lifetime_consumption": as_float(total),
             "month_to_date": as_float(month_total),
             "year_to_date": as_float(year_total),
+            "added_months": added_months or None,
             "value_source": source,
             "customer": customer,
             "customer_number": customer_number,
