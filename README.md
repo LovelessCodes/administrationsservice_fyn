@@ -109,7 +109,13 @@ Assistant **Energy** and **Water** dashboards.
 ### Water and district heating
 
 ASFyn does not discover utilities from the property address. It reads the
-customer numbers linked to your login. To add water or district heating:
+customer numbers linked to your login.
+
+Water billed by **Vandcenter Syd** is a separate portal
+(`vandcenter.smartforsyning.dk`) and is **not** part of ASFyn. Keep the
+Vandcenter Syd integration for that meter; ASFyn cannot expose it.
+
+To add a water or district heating account that *is* handled by ASFyn:
 
 1. Log in at <https://www.asfyn.dk/>.
 2. Open **My EnergiFyn** → **Change customer** (the portal also exposes
