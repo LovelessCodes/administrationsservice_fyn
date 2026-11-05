@@ -197,6 +197,11 @@ class ASFApiClient:
             headers = {
                 "Authorization": f"Bearer {self._access_token}",
                 "Accept": "application/json",
+                "Accept-Language": "da-DK",
+                "Origin": SSO_ORIGIN,
+                "Referer": f"{SSO_ORIGIN}/",
+                "Cache-Control": "no-cache",
+                "Pragma": "no-cache",
             }
 
             try:
