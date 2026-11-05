@@ -35,6 +35,7 @@ from .const import (
     MIN_SCAN_INTERVAL,
     NAME,
     SSO_LOGIN_URL,
+    SSO_STORAGE_KEY,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -124,7 +125,10 @@ class ASFConfigFlow(ConfigFlow, domain=DOMAIN):
             step_id="user",
             data_schema=vol.Schema({vol.Required(CONF_REFRESH_TOKEN): str}),
             errors=errors,
-            description_placeholders={"url": SSO_LOGIN_URL},
+            description_placeholders={
+                "url": SSO_LOGIN_URL,
+                "storage_key": SSO_STORAGE_KEY,
+            },
         )
 
     async def async_step_reauth(self, entry_data: dict[str, Any]) -> ConfigFlowResult:
@@ -168,7 +172,10 @@ class ASFConfigFlow(ConfigFlow, domain=DOMAIN):
             step_id="reauth_confirm",
             data_schema=vol.Schema({vol.Required(CONF_REFRESH_TOKEN): str}),
             errors=errors,
-            description_placeholders={"url": SSO_LOGIN_URL},
+            description_placeholders={
+                "url": SSO_LOGIN_URL,
+                "storage_key": SSO_STORAGE_KEY,
+            },
         )
 
     @staticmethod

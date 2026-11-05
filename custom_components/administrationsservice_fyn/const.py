@@ -18,6 +18,7 @@ SSO_CLIENT_SECRET: Final = "208c7724d296407aa22f31fa200c6459"
 SSO_SCOPE: Final = "openid profile customer offline_access"
 SSO_ORIGIN: Final = "https://www.asfyn.dk"
 SSO_LOGIN_URL: Final = "https://www.asfyn.dk/"
+SSO_STORAGE_KEY: Final = "oidc.user:https://accounts.forsyningslogin.dk:af-spa"
 
 # Config entry keys
 CONF_REFRESH_TOKEN: Final = "refresh_token"

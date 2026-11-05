@@ -4,21 +4,21 @@
     "step": {
       "user": {
         "title": "Forbind til Administrationsservice Fyn",
-        "description": "Log ind på [{url}]({url}), åbn browserens udviklerværktøjer, og kopiér værdien af cookien `sso_refresh_token`.\n\nRefresh-tokenet byttes til et kortvarigt access-token og fornyes automatisk. Det roterer ved hver fornyelse, så brug ikke en gammel værdi.",
+        "description": "Log ind på [{url}]({url}). Åbn browserens udviklerværktøjer, gå til **Application → Session Storage**, vælg `{storage_key}`, og kopiér feltet `refresh_token` fra JSON-værdien.\n\nDu kan også kopiere cookien `sso_refresh_token`.\n\nRefresh-tokenet byttes til et kortvarigt access-token og fornyes automatisk. Det roterer ved hver fornyelse, så brug ikke en gammel værdi.",
         "data": {
           "refresh_token": "Refresh-token"
         }
       },
       "reauth_confirm": {
         "title": "Genforbind Administrationsservice Fyn",
-        "description": "Det gemte login er ikke længere gyldigt. Log ind på [{url}]({url}), og indsæt en ny `sso_refresh_token`-cookie.",
+        "description": "Det gemte login er ikke længere gyldigt. Log ind på [{url}]({url}), og indsæt et nyt `refresh_token` fra `{storage_key}` eller en ny `sso_refresh_token`-cookie.",
         "data": {
           "refresh_token": "Refresh-token"
         }
       }
     },
     "error": {
-      "invalid_auth": "Refresh-tokenet er ugyldigt eller udløbet. Kopiér en ny `sso_refresh_token`-cookie, og prøv igen.",
+      "invalid_auth": "Refresh-tokenet er ugyldigt eller udløbet. Kopiér et nyt `refresh_token` fra session storage eller en ny `sso_refresh_token`-cookie, og prøv igen.",
       "cannot_connect": "Der kunne ikke oprettes forbindelse til Administrationsservice Fyns API. Prøv igen senere.",
       "no_customers": "Login lykkedes, men der blev ikke fundet nogen kunder på kontoen.",
       "unknown": "Der opstod en uventet fejl. Se Home Assistant-loggen for detaljer."

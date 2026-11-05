@@ -4,21 +4,21 @@
     "step": {
       "user": {
         "title": "Connect to Administrationsservice Fyn",
-        "description": "Log in at [{url}]({url}), open the developer tools of your browser, and copy the value of the `sso_refresh_token` cookie.\n\nThe refresh token is exchanged for a short-lived access token and is renewed automatically. It rotates on every refresh, so do not reuse an old value.",
+        "description": "Log in at [{url}]({url}). Open the browser developer tools, go to **Application → Session Storage**, select `{storage_key}`, and copy the `refresh_token` field from the JSON value.\n\nAlternatively, copy the `sso_refresh_token` cookie.\n\nThe refresh token is exchanged for a short-lived access token and is renewed automatically. It rotates on every refresh, so do not reuse an old value.",
         "data": {
           "refresh_token": "Refresh token"
         }
       },
       "reauth_confirm": {
         "title": "Reconnect Administrationsservice Fyn",
-        "description": "The stored login is no longer valid. Log in at [{url}]({url}) and paste a fresh `sso_refresh_token` cookie value.",
+        "description": "The stored login is no longer valid. Log in at [{url}]({url}) and paste a fresh `refresh_token` from `{storage_key}`, or a fresh `sso_refresh_token` cookie.",
         "data": {
           "refresh_token": "Refresh token"
         }
       }
     },
     "error": {
-      "invalid_auth": "The refresh token is invalid or has expired. Copy a new `sso_refresh_token` cookie and try again.",
+      "invalid_auth": "The refresh token is invalid or has expired. Copy a fresh `refresh_token` from the session storage or a new `sso_refresh_token` cookie and try again.",
       "cannot_connect": "Could not reach the Administrationsservice Fyn API. Try again later.",
       "no_customers": "The login succeeded, but no customers were found on this account.",
       "unknown": "An unexpected error occurred. Check the Home Assistant log for details."

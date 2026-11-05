@@ -53,17 +53,17 @@ its own short-lived access tokens.
 
 1. Open <https://www.asfyn.dk/> and log in with MitID.
 2. Open your browser's developer tools:
-   - **Chrome / Edge:** `F12` → **Application** → **Storage** → **Cookies**
-   - **Firefox:** `F12` → **Storage** → **Cookies**
-   - **Safari:** **Develop** → **Show Web Inspector** → **Storage** → **Cookies**
-3. Select the `accounts.forsyningslogin.dk` domain (or `www.asfyn.dk`).
-4. Copy the value of the **`sso_refresh_token`** cookie. It is often marked
-   `HttpOnly`; that is fine, the value is still visible in the developer tools.
+   - **Chrome / Edge:** `F12` → **Application**
+   - **Firefox:** `F12` → **Storage**
+   - **Safari:** **Develop** → **Show Web Inspector** → **Storage**
+3. Open **Session Storage**, select
+   `oidc.user:https://accounts.forsyningslogin.dk:af-spa`, and copy the
+   `refresh_token` field from the JSON value.
+4. Alternatively, open **Cookies** for `accounts.forsyningslogin.dk` (or
+   `www.asfyn.dk`) and copy the **`sso_refresh_token`** value. It is often
+   marked `HttpOnly`; that is fine, the value is still visible in the developer
+   tools.
 5. Paste the value into the integration setup form.
-
-As a fallback, open **Session storage**, select
-`oidc.user:https://accounts.forsyningslogin.dk:af-spa`, and copy the
-`refresh_token` field from the JSON value.
 
 The value may be URL-encoded. The integration decodes it automatically, so
 paste it exactly as shown.
