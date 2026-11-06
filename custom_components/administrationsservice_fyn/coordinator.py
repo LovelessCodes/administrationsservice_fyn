@@ -680,6 +680,14 @@ class ASFDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     @staticmethod
     def _day_params(target: date, kind: str) -> dict[str, Any] | None:
         """Build the day query parameters for a supported API format."""
+        if kind == "components":
+            return {
+                "year": target.year,
+                "quarter": (target.month - 1) // 3 + 1,
+                "week": target.isocalendar().week,
+                "month": target.month,
+                "day": target.day,
+            }
         base = {"year": target.year, "month": target.month}
         if kind == "iso":
             return {**base, "day": target.isoformat()}
@@ -730,6 +738,7 @@ class ASFDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         ) -> None:
             self.hourly_probe.append(
                 {
+                    "target": target.isoformat(),
                     "kind": kind,
                     "params": params,
                     "count": len(items),
@@ -753,12 +762,12 @@ class ASFDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             record(kind, params, items)
             if self._items_match_date(items, target):
                 return items
-            if target == today - timedelta(days=1):
+            if items:
                 # The cached format stopped working; rediscover next time.
                 self._day_param_kind = None
             return []
 
-        for candidate in ("iso", "iso_time", "day_number"):
+        for candidate in ("components", "iso", "iso_time", "day_number"):
             params = self._day_params(target, candidate)
             items = await self._async_get_items(data, "day", params)
             record(candidate, params, items)
@@ -860,7 +869,6 @@ class ASFDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     ) -> None:
         """Import the hourly electricity series."""
         today = dt_util.now().date()
-        yesterday = today - timedelta(days=1)
 
         for data in sensors.values():
             if data.get("sensor_key") != SENSOR_ELECTRICITY:
@@ -868,44 +876,34 @@ class ASFDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             if "day" not in self._filters(data):
                 continue
 
-            # Discover the date format on the most recent complete day before
-            # importing older days, so a failure does not hide yesterday.
-            probe: list[dict[str, Any]] | None = None
-            if self._day_param_kind is None:
-                probe = await self._async_get_day_items(data, yesterday)
-                if not probe:
-                    continue
+            # The portal publishes a day with a delay, so query every day in
+            # the window and import whichever days are already available.
+            targets = [today - timedelta(days=offset) for offset in range(days, 0, -1)]
 
-            if self._day_param_kind == "none":
-                targets = [yesterday]
-            else:
-                targets = [
-                    today - timedelta(days=offset) for offset in range(days, 0, -1)
-                ]
-
+            imported = 0
             for target in targets:
-                if target == yesterday and probe is not None:
-                    items = probe
-                else:
-                    items = await self._async_get_day_items(data, target)
+                items = await self._async_get_day_items(data, target)
                 points = asf_statistics.parse_items(
                     items,
                     start_date=target,
                     end_date=target + timedelta(days=1),
                 )
-                if not points and target == yesterday:
-                    stat_id = asf_statistics.statistic_id(data)
-                    self.statistics_status[stat_id] = {
-                        "statistic_id": stat_id,
-                        "name": asf_statistics.metadata(data).get("name"),
-                        "unit": data.get("unit"),
-                        "error": "No hourly points returned for yesterday",
-                        "day_param_kind": self._day_param_kind,
-                        "day_probe": self.hourly_probe,
-                        "last_import": dt_util.utcnow().isoformat(),
-                    }
+                if not points:
                     continue
                 await self._async_import_sensor_points(data, points, period="hour")
+                imported += 1
+
+            if not imported:
+                stat_id = asf_statistics.statistic_id(data)
+                self.statistics_status[stat_id] = {
+                    "statistic_id": stat_id,
+                    "name": asf_statistics.metadata(data).get("name"),
+                    "unit": data.get("unit"),
+                    "error": "No hourly data is available yet",
+                    "day_param_kind": self._day_param_kind,
+                    "day_probe": self.hourly_probe,
+                    "last_import": dt_util.utcnow().isoformat(),
+                }
 
     async def _async_import_statistics(
         self, sensors: dict[str, dict[str, Any]]

@@ -7,7 +7,7 @@ from typing import Final
 
 DOMAIN: Final = "administrationsservice_fyn"
 NAME: Final = "Administrationsservice Fyn"
-VERSION: Final = "1.3.2"
+VERSION: Final = "1.3.3"
 
 # API endpoints
 SELFSERVICE_API_BASE: Final = "https://efselfserviceapi.azurewebsites.net/api"
