@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
-from typing import Any
+from typing import Any, Literal
 
 from homeassistant.components.sensor import SensorDeviceClass
 from homeassistant.config_entries import ConfigEntry
@@ -15,6 +15,7 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.util import dt as dt_util
 
+from . import statistics as asf_statistics
 from .api import (
     ASFApiClient,
     ASFApiError,
@@ -42,6 +43,10 @@ from .const import (
     SENSOR_HEAT,
     SENSOR_HOT_WATER,
     SENSOR_WATER,
+    STATISTICS_DAILY_BACKFILL_DAYS,
+    STATISTICS_DAILY_REFRESH_DAYS,
+    STATISTICS_HOURLY_BACKFILL_DAYS,
+    STATISTICS_HOURLY_REFRESH_DAYS,
     UNIT_GJ,
     UNIT_KWH,
     UNIT_M3,
@@ -202,6 +207,19 @@ def _months_after(last: date, current: date) -> list[tuple[int, int]]:
     return months
 
 
+def _month_starts(start: date, end: date) -> list[tuple[int, int]]:
+    """Return every month from ``start`` through ``end``."""
+    months: list[tuple[int, int]] = []
+    year, month = start.year, start.month
+    while (year, month) <= (end.year, end.month):
+        months.append((year, month))
+        month += 1
+        if month > 12:
+            month = 1
+            year += 1
+    return months
+
+
 class ASFDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     """Coordinator that fetches customers, estates, products and readings."""
 
@@ -217,6 +235,9 @@ class ASFDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             update_interval=timedelta(minutes=scan_interval),
         )
         self.entry = entry
+        self.statistics_status: dict[str, dict[str, Any]] = {}
+        self._statistics_initialized = False
+        self._day_param_kind: str | None = None
         self.api = ASFApiClient(
             async_get_clientsession(hass),
             clean_refresh_token(entry.data[CONF_REFRESH_TOKEN]),
@@ -420,6 +441,13 @@ class ASFDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "on this account."
             )
 
+        try:
+            await self._async_import_statistics(sensors)
+        except ASFAuthError:
+            raise
+        except Exception as err:  # noqa: BLE001 - statistics must not break sensors
+            _LOGGER.warning("Could not import ASF long-term statistics: %s", err)
+
         return {
             "sensors": sensors,
             "profiles": profiles,
@@ -598,3 +626,259 @@ class ASFDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "tariff": product.get("tarifArt"),
             "subscription_state": product.get("subscriptionState"),
         }
+
+    @staticmethod
+    def _filters(data: dict[str, Any]) -> set[str]:
+        """Return the available period filters for a sensor."""
+        product = data.get("product") or {}
+        return {str(item).lower() for item in (product.get("availableFilters") or [])}
+
+    def _supports_daily_statistics(self, data: dict[str, Any]) -> bool:
+        """Return True when the product exposes daily consumption."""
+        filters = self._filters(data)
+        if "month" not in filters:
+            return False
+        # Electricity with an hourly day series is imported hourly only, so
+        # daily and hourly rows never overlap.
+        return not (data.get("sensor_key") == SENSOR_ELECTRICITY and "day" in filters)
+
+    async def _async_get_items(
+        self,
+        data: dict[str, Any],
+        period: str,
+        params: dict[str, Any] | None = None,
+    ) -> list[dict[str, Any]]:
+        """Fetch the item list for one consumption period."""
+        result = await self._optional(
+            self.api.async_get_consumption(
+                str(data["customer_number"]),
+                data["estate_id"],
+                data["meter_id"],
+                data["installation_id"],
+                data["api_unit"],
+                period,
+                params,
+            )
+        )
+        if not result:
+            return []
+        items = result.get("items")
+        return items if isinstance(items, list) else []
+
+    async def _async_get_month_items(
+        self,
+        data: dict[str, Any],
+        year: int,
+        month: int,
+    ) -> list[dict[str, Any]]:
+        """Fetch daily items for one calendar month."""
+        return await self._async_get_items(
+            data, "month", {"year": year, "month": month}
+        )
+
+    @staticmethod
+    def _day_params(target: date, kind: str) -> dict[str, Any] | None:
+        """Build the day query parameters for a supported API format."""
+        base = {"year": target.year, "month": target.month}
+        if kind == "iso":
+            return {**base, "day": target.isoformat()}
+        if kind == "iso_time":
+            return {
+                **base,
+                "day": target.strftime("%Y-%m-%dT%H:%M:%S"),
+            }
+        if kind == "day_number":
+            return {**base, "day": target.day}
+        return None
+
+    @staticmethod
+    def _items_match_date(items: list[dict[str, Any]], target: date) -> bool:
+        """Return True if every item belongs to the requested date."""
+        if not items:
+            return False
+        for item in items:
+            parsed = asf_statistics.parse_local_datetime(item.get("date"))
+            if parsed is None or parsed.date() != target:
+                return False
+        return True
+
+    async def _async_get_day_items(
+        self,
+        data: dict[str, Any],
+        target: date,
+    ) -> list[dict[str, Any]]:
+        """Fetch the hourly series for one day, discovering the query format."""
+        today = dt_util.now().date()
+        if target >= today:
+            return []
+
+        kind = self._day_param_kind
+        if kind == "none":
+            if target != today - timedelta(days=1):
+                return []
+            items = await self._async_get_items(data, "day", None)
+            return items if self._items_match_date(items, target) else []
+
+        if kind is not None:
+            items = await self._async_get_items(
+                data, "day", self._day_params(target, kind)
+            )
+            if self._items_match_date(items, target):
+                return items
+            if target == today - timedelta(days=1):
+                # The cached format stopped working; rediscover next time.
+                self._day_param_kind = None
+            return []
+
+        for candidate in ("iso", "iso_time", "day_number"):
+            items = await self._async_get_items(
+                data, "day", self._day_params(target, candidate)
+            )
+            if self._items_match_date(items, target):
+                self._day_param_kind = candidate
+                return items
+
+        # The portal defaults to yesterday when no date is supplied.
+        if target == today - timedelta(days=1):
+            items = await self._async_get_items(data, "day", None)
+            if self._items_match_date(items, target):
+                self._day_param_kind = "none"
+                return items
+
+        return []
+
+    async def _async_import_sensor_points(
+        self,
+        data: dict[str, Any],
+        points: list[tuple[datetime, float]],
+        *,
+        period: Literal["hour", "day"],
+    ) -> None:
+        """Import points for one sensor and record the result."""
+        if not points:
+            return
+
+        stat_id = asf_statistics.statistic_id(data)
+        name = asf_statistics.metadata(data).get("name")
+        try:
+            count = await asf_statistics.async_import_points(
+                self.hass,
+                data,
+                points,
+                period=period,
+            )
+        except Exception as err:  # noqa: BLE001 - keep sensor updates working
+            _LOGGER.warning("Could not import statistics %s: %s", stat_id, err)
+            self.statistics_status[stat_id] = {
+                "statistic_id": stat_id,
+                "name": name,
+                "unit": data.get("unit"),
+                "error": str(err),
+                "last_import": dt_util.utcnow().isoformat(),
+            }
+            return
+
+        self.statistics_status[stat_id] = {
+            "statistic_id": stat_id,
+            "name": name,
+            "unit": data.get("unit"),
+            "points": count,
+            "first": points[0][0].isoformat(),
+            "last": points[-1][0].isoformat(),
+            "last_import": dt_util.utcnow().isoformat(),
+        }
+
+    async def _async_backfill_daily_statistics(
+        self, sensors: dict[str, dict[str, Any]]
+    ) -> None:
+        """Import daily consumption for the initial backfill window."""
+        today = dt_util.now().date()
+        start = today - timedelta(days=STATISTICS_DAILY_BACKFILL_DAYS)
+
+        for data in sensors.values():
+            if not self._supports_daily_statistics(data):
+                continue
+
+            for year, month in _month_starts(start, today):
+                items = await self._async_get_month_items(data, year, month)
+                points = asf_statistics.parse_items(
+                    items, start_date=start, end_date=today
+                )
+                await self._async_import_sensor_points(data, points, period="day")
+
+    async def _async_import_recent_daily_statistics(
+        self, sensors: dict[str, dict[str, Any]]
+    ) -> None:
+        """Re-import recent daily consumption to pick up corrections."""
+        today = dt_util.now().date()
+        start = today - timedelta(days=STATISTICS_DAILY_REFRESH_DAYS)
+
+        for data in sensors.values():
+            if not self._supports_daily_statistics(data):
+                continue
+
+            items: list[dict[str, Any]] = []
+            for year, month in _month_starts(start, today):
+                items.extend(await self._async_get_month_items(data, year, month))
+            points = asf_statistics.parse_items(items, start_date=start, end_date=today)
+            await self._async_import_sensor_points(data, points, period="day")
+
+    async def _async_import_hourly_statistics(
+        self,
+        sensors: dict[str, dict[str, Any]],
+        *,
+        days: int,
+    ) -> None:
+        """Import the hourly electricity series."""
+        today = dt_util.now().date()
+        yesterday = today - timedelta(days=1)
+
+        for data in sensors.values():
+            if data.get("sensor_key") != SENSOR_ELECTRICITY:
+                continue
+            if "day" not in self._filters(data):
+                continue
+
+            # Discover the date format on the most recent complete day before
+            # importing older days, so a failure does not hide yesterday.
+            probe: list[dict[str, Any]] | None = None
+            if self._day_param_kind is None:
+                probe = await self._async_get_day_items(data, yesterday)
+                if not probe:
+                    continue
+
+            if self._day_param_kind == "none":
+                targets = [yesterday]
+            else:
+                targets = [
+                    today - timedelta(days=offset) for offset in range(days, 0, -1)
+                ]
+
+            for target in targets:
+                if target == yesterday and probe is not None:
+                    items = probe
+                else:
+                    items = await self._async_get_day_items(data, target)
+                points = asf_statistics.parse_items(
+                    items,
+                    start_date=target,
+                    end_date=target + timedelta(days=1),
+                )
+                await self._async_import_sensor_points(data, points, period="hour")
+
+    async def _async_import_statistics(
+        self, sensors: dict[str, dict[str, Any]]
+    ) -> None:
+        """Import long-term statistics without blocking live sensor values."""
+        if not self._statistics_initialized:
+            await self._async_backfill_daily_statistics(sensors)
+            await self._async_import_hourly_statistics(
+                sensors, days=STATISTICS_HOURLY_BACKFILL_DAYS
+            )
+            self._statistics_initialized = True
+            return
+
+        await self._async_import_recent_daily_statistics(sensors)
+        await self._async_import_hourly_statistics(
+            sensors, days=STATISTICS_HOURLY_REFRESH_DAYS
+        )

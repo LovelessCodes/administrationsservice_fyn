@@ -22,6 +22,7 @@ sensors.
 - One Home Assistant device per property/estate
 - Automatic OAuth refresh-token rotation
 - Lifetime, month-to-date and year-to-date values as attributes
+- Long-term statistics with hourly electricity and daily water/heating values
 - Reauthentication flow when the login expires
 - Configurable polling interval (15 minutes to 24 hours)
 - Manual refresh button
@@ -180,6 +181,45 @@ domestic hot water. Do not add it to *Water consumption* alongside the cold
 water meter; that would double-count water. Use it in a statistics card or
 automation instead.
 
+### Long-term statistics
+
+ASFyn returns a **day** series for electricity and a **month** series with one
+value per day for water, heating, hot water and gas. The integration imports
+those series into Home Assistant long-term statistics, independently of the
+sensor state:
+
+| Sensor | Statistic resolution | Backfill on first setup |
+| --- | --- | --- |
+| Electricity | Hourly | 7 days |
+| Water | Daily | 90 days |
+| District heating | Daily | 90 days |
+| Hot water | Daily | 90 days |
+| Gas | Daily | 90 days |
+
+The statistic IDs are stable and include the customer, estate, installation,
+meter and sensor, for example:
+
+```text
+administrationsservice_fyn:12345678_1234567_123456_1_electricity_consumption
+```
+
+The current statistic ID is also exposed as the `statistic_id` attribute on
+each sensor. The statistics are **external statistics**, not entities. They do
+not change the sensor states and cannot be used directly as automation
+triggers.
+
+On every refresh the integration re-imports the most recent days, so late or
+corrected meter values replace the earlier rows. The first setup backfills the
+periods in the table above. The hourly electricity date format is discovered
+automatically; if ASFyn only exposes yesterday's hourly series, the hourly
+statistic starts with yesterday and grows from there.
+
+To use these series in the **Energy dashboard**, replace the existing source
+with the matching statistic rather than adding both. Adding both the source
+entity and its external statistic would count the same consumption twice. The
+entity sensors remain the right choice for automations and for the current
+meter value.
+
 ### Attributes
 
 Each sensor exposes useful metadata:
@@ -204,6 +244,7 @@ Each sensor exposes useful metadata:
 | `year_to_date` | Consumption for the current year |
 | `added_months` | Month totals added after the latest physical reading |
 | `value_source` | `cumulative_total` or `meter_reading` |
+| `statistic_id` | External long-term statistic for this sensor |
 
 The sensor state is cumulative consumption. The physical meter reading is the
 `meter_reading` attribute. This means the sensor can update daily even when
@@ -222,6 +263,11 @@ feed: values are updated when the utility receives new meter data. The
 current-month endpoint is updated daily (with a one-day lag), the year endpoint
 monthly, and the physical meter reading monthly or yearly. A manual **Refresh**
 button is available on the integration device.
+
+The long-term statistics import runs during the same refresh. It stores
+electricity hour by hour and the other products day by day, so the statistics
+show when consumption happened instead of when ASFyn published the reading.
+The live sensor state remains the cumulative meter value.
 
 New meters are discovered when the integration starts. If a new product is
 added to your account, reload the integration or restart Home Assistant to
@@ -245,6 +291,19 @@ created, wait until it becomes active.
 Water, district heating and gas are separate customer profiles. Link those
 customer numbers in the ASFyn portal, then reload the integration. See
 [Water and district heating](#water-and-district-heating).
+
+### Statistics are missing or empty
+
+The statistics import needs the Home Assistant **Recorder** integration, which
+is enabled by default. Download **Diagnostics** from the integration and check
+the `statistics` section for each sensor's statistic ID, imported point count
+and last import time. If the section is empty, the product did not expose a
+`day` or `month` series, or the API returned no items.
+
+The external statistics start with the backfill window; they do not contain
+all history from the entity sensor. Importing the same consumption into both
+the entity and the external statistic would double-count it in the Energy
+dashboard.
 
 ### "Could not reach the Administrationsservice Fyn API"
 

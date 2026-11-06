@@ -7,7 +7,7 @@ from typing import Final
 
 DOMAIN: Final = "administrationsservice_fyn"
 NAME: Final = "Administrationsservice Fyn"
-VERSION: Final = "1.2.1"
+VERSION: Final = "1.3.0"
 
 # API endpoints
 SELFSERVICE_API_BASE: Final = "https://efselfserviceapi.azurewebsites.net/api"
@@ -33,6 +33,12 @@ TOKEN_REFRESH_MARGIN: Final = 300  # seconds before expiry to refresh
 
 UPDATE_INTERVAL: Final = timedelta(minutes=DEFAULT_SCAN_INTERVAL)
 REQUEST_TIMEOUT: Final = 30
+
+# Long-term statistics import
+STATISTICS_DAILY_BACKFILL_DAYS: Final = 90
+STATISTICS_DAILY_REFRESH_DAYS: Final = 35
+STATISTICS_HOURLY_BACKFILL_DAYS: Final = 7
+STATISTICS_HOURLY_REFRESH_DAYS: Final = 2
 
 # Product / meter types
 PRODUCT_EL: Final = "el"

@@ -63,5 +63,16 @@ async def async_get_config_entry_diagnostics(
                 coordinator_data.get("profiles", []), TO_REDACT
             ),
             "sensors": [async_redact_data(item, TO_REDACT) for item in sensors],
+            "statistics": [
+                async_redact_data(
+                    {
+                        key: value
+                        for key, value in item.items()
+                        if key != "statistic_id"
+                    },
+                    TO_REDACT,
+                )
+                for item in (coordinator.statistics_status or {}).values()
+            ],
         },
     }

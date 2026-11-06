@@ -25,6 +25,7 @@ from .const import (
     SSO_LOGIN_URL,
 )
 from .coordinator import ASFDataUpdateCoordinator
+from .statistics import statistic_id
 
 SENSOR_LABELS = {
     SENSOR_ELECTRICITY: "Electricity",
@@ -136,6 +137,7 @@ class ASFConsumptionSensor(
             "year_to_date": data.get("year_to_date"),
             "value_source": data.get("value_source"),
             "api_unit": data.get("api_unit"),
+            "statistic_id": statistic_id(data),
         }
         if data.get("added_months"):
             attributes["added_months"] = data["added_months"]
