@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import logging
 
+import voluptuous as vol
+
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, ServiceCall, SupportsResponse
 
 from .const import DOMAIN
 from .coordinator import ASFDataUpdateCoordinator
@@ -28,6 +30,51 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+
+    async def async_debug_day(call: ServiceCall) -> dict:
+        """Return the raw day response for debugging."""
+        coordinator: ASFDataUpdateCoordinator = hass.data[DOMAIN][entry.entry_id][
+            "coordinator"
+        ]
+        sensor_key = call.data.get("sensor_key", "electricity")
+        data = next(
+            item
+            for item in coordinator.data["sensors"].values()
+            if item["sensor_key"] == sensor_key
+        )
+        params = call.data.get("params")
+        try:
+            result = await coordinator.api.async_get_consumption(
+                str(data["customer_number"]),
+                data["estate_id"],
+                data["meter_id"],
+                data["installation_id"],
+                data["api_unit"],
+                "day",
+                dict(params) if params else None,
+            )
+        except Exception as err:  # noqa: BLE001 - debug helper
+            return {
+                "ok": False,
+                "type": type(err).__name__,
+                "error": str(err),
+                "params": params,
+            }
+        return {"ok": True, "params": params, "result": result}
+
+    if not hass.services.has_service(DOMAIN, "debug_day"):
+        hass.services.async_register(
+            DOMAIN,
+            "debug_day",
+            async_debug_day,
+            schema=vol.Schema(
+                {
+                    vol.Optional("sensor_key", default="electricity"): str,
+                    vol.Optional("params"): dict,
+                }
+            ),
+            supports_response=SupportsResponse.ONLY,
+        )
     return True
 
 
