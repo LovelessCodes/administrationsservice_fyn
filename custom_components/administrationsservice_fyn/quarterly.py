@@ -53,12 +53,20 @@ def _quarter_end(year: int, quarter: int) -> date:
     return date(year, month, calendar.monthrange(year, month)[1])
 
 
-def _month_key_from_timestamp(timestamp: float) -> tuple[int, int]:
-    """Return the local year and month for a statistic timestamp."""
+def _previous_month_key_from_timestamp(timestamp: float) -> tuple[int, int]:
+    """Return the month whose change is stored at a monthly statistic boundary.
+
+    Recorder monthly rows carry the cumulative sum at the start of the month and
+    the change since the previous boundary, so the change belongs to the month
+    before the row's timestamp.
+    """
     if timestamp > 100_000_000_000:
         timestamp /= 1000
     local = dt_util.as_local(datetime.fromtimestamp(timestamp, tz=timezone.utc))
-    return local.year, local.month
+    year, month = local.year, local.month - 1
+    if month == 0:
+        year, month = year - 1, 12
+    return year, month
 
 
 def _parse_api_months(data: Mapping[str, Any] | None) -> dict[tuple[int, int], float]:
@@ -230,7 +238,7 @@ class QuarterlyCostCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 change = _as_float(row.get("change"))
                 if timestamp is None or change is None:
                     continue
-                values[_month_key_from_timestamp(timestamp)] = change
+                values[_previous_month_key_from_timestamp(timestamp)] = change
             return values
 
         water = convert(WATER_TOTAL_STATISTIC_ID)
