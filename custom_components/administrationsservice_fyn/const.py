@@ -7,7 +7,7 @@ from typing import Final
 
 DOMAIN: Final = "administrationsservice_fyn"
 NAME: Final = "Administrationsservice Fyn"
-VERSION: Final = "1.4.1"
+VERSION: Final = "1.4.2"
 
 # API endpoints
 SELFSERVICE_API_BASE: Final = "https://efselfserviceapi.azurewebsites.net/api"
@@ -25,12 +25,14 @@ CONF_REFRESH_TOKEN: Final = "refresh_token"
 CONF_ACCESS_TOKEN: Final = "access_token"
 CONF_TOKEN_EXPIRES: Final = "token_expires"
 CONF_SCAN_INTERVAL: Final = "scan_interval"
+CONF_ELECTRICITY_PRICE: Final = "electricity_price"
 CONF_WATER_PRICE: Final = "water_price"
 CONF_HEAT_PRICE: Final = "heat_price"
 CONF_HEAT_WATER_PRICE: Final = "heat_water_price"
 
 DEFAULT_SCAN_INTERVAL: Final = 60  # minutes
 # Variable 2026 tariffs including VAT. Fixed annual fees are not included.
+DEFAULT_ELECTRICITY_PRICE: Final = 3.19  # DKK/kWh, current total price
 DEFAULT_WATER_PRICE: Final = 65.98  # DKK/m3, VandCenter Syd
 DEFAULT_HEAT_PRICE: Final = 163.75  # DKK/GJ, Fjernvarme Fyn
 DEFAULT_HEAT_WATER_PRICE: Final = 4.50  # DKK/m3, Fjernvarme Fyn

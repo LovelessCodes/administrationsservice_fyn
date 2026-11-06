@@ -36,6 +36,7 @@ from .const import (
     WATER_PRICE_URL,
 )
 from .coordinator import ASFDataUpdateCoordinator
+from .quarterly import QuarterlyCostCoordinator
 from .statistics import statistic_id
 
 SENSOR_LABELS = {
@@ -131,6 +132,12 @@ async def async_setup_entry(
     by_estate: dict[Any, dict[str, dict[str, Any]]] = {}
     for data in sensors.values():
         by_estate.setdefault(data["estate_id"], {})[data["sensor_key"]] = data
+
+    quarterly = hass.data[DOMAIN][entry.entry_id].get("quarterly")
+    if quarterly is not None and sensors:
+        entities.append(
+            ASFQuarterlyCostSensor(quarterly, entry, next(iter(sensors.values())))
+        )
 
     for estate_sensors in by_estate.values():
         base = next(iter(estate_sensors.values()))
@@ -288,3 +295,51 @@ class ASFPriceSensor(
         }
         attributes.update(self._spec.attributes)
         return attributes
+
+
+class ASFQuarterlyCostSensor(
+    CoordinatorEntity[QuarterlyCostCoordinator],
+    SensorEntity,
+):
+    """Projected variable cost for the current quarter."""
+
+    _attr_has_entity_name = True
+    _attr_translation_key = "quarterly_cost"
+    _attr_device_class = SensorDeviceClass.MONETARY
+    _attr_native_unit_of_measurement = "DKK"
+    _attr_icon = "mdi:cash-multiple"
+    _attr_suggested_display_precision = 0
+
+    def __init__(
+        self,
+        coordinator: QuarterlyCostCoordinator,
+        entry: ConfigEntry,
+        data: dict[str, Any],
+    ) -> None:
+        """Initialize the quarterly cost sensor."""
+        super().__init__(coordinator)
+        self._attr_unique_id = f"{DOMAIN}_{entry.entry_id}_quarterly_cost"
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, f"{data['customer_number']}_{data['estate_id']}")},
+            name=data["estate_name"],
+            manufacturer="Administrationsservice Fyn",
+            model="Utility meters",
+            configuration_url=SSO_LOGIN_URL,
+        )
+
+    @property
+    def native_value(self) -> float | None:
+        """Return the projected cost for the current quarter."""
+        if not self.coordinator.data:
+            return None
+        return self.coordinator.data.get("current_quarter_projected")
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return the quarterly series and tariff assumptions."""
+        return dict(self.coordinator.data or {})
+
+    @property
+    def available(self) -> bool:
+        """Return True once the quarterly data has been loaded."""
+        return super().available and bool(self.coordinator.data)

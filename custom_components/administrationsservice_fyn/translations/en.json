@@ -37,7 +37,8 @@
           "scan_interval": "Update interval (minutes)",
           "water_price": "Water price (DKK/m³)",
           "heat_price": "District heating price (DKK/GJ)",
-          "heat_water_price": "District heating water price (DKK/m³)"
+          "heat_water_price": "District heating water price (DKK/m³)",
+          "electricity_price": "Electricity price (DKK/kWh)"
         }
       }
     }
@@ -67,6 +68,9 @@
       },
       "heat_water_price": {
         "name": "Heating water price"
+      },
+      "quarterly_cost": {
+        "name": "Quarterly cost"
       }
     },
     "button": {

@@ -37,7 +37,8 @@
           "scan_interval": "Opdateringsinterval (minutter)",
           "water_price": "Vandpris (kr./m³)",
           "heat_price": "Fjernvarmepris (kr./GJ)",
-          "heat_water_price": "Pris for målt fjernvarmevand (kr./m³)"
+          "heat_water_price": "Pris for målt fjernvarmevand (kr./m³)",
+          "electricity_price": "Elpris (kr./kWh)"
         }
       }
     }
@@ -67,6 +68,9 @@
       },
       "heat_water_price": {
         "name": "Pris for målt varmevand"
+      },
+      "quarterly_cost": {
+        "name": "Kvartalspris"
       }
     },
     "button": {

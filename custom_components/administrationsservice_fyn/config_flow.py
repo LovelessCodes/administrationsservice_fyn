@@ -27,11 +27,13 @@ from .api import (
 from .const import (
     CONF_ACCESS_TOKEN,
     CONF_REFRESH_TOKEN,
+    CONF_ELECTRICITY_PRICE,
     CONF_HEAT_PRICE,
     CONF_HEAT_WATER_PRICE,
     CONF_SCAN_INTERVAL,
     CONF_TOKEN_EXPIRES,
     CONF_WATER_PRICE,
+    DEFAULT_ELECTRICITY_PRICE,
     DEFAULT_HEAT_PRICE,
     DEFAULT_HEAT_WATER_PRICE,
     DEFAULT_SCAN_INTERVAL,
@@ -212,6 +214,11 @@ class ASFOptionsFlow(OptionsFlow):
         current = int(
             self.config_entry.options.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL)
         )
+        electricity_price = float(
+            self.config_entry.options.get(
+                CONF_ELECTRICITY_PRICE, DEFAULT_ELECTRICITY_PRICE
+            )
+        )
         water_price = float(
             self.config_entry.options.get(CONF_WATER_PRICE, DEFAULT_WATER_PRICE)
         )
@@ -231,6 +238,9 @@ class ASFOptionsFlow(OptionsFlow):
                         vol.Coerce(int),
                         vol.Range(min=MIN_SCAN_INTERVAL, max=MAX_SCAN_INTERVAL),
                     ),
+                    vol.Optional(
+                        CONF_ELECTRICITY_PRICE, default=electricity_price
+                    ): vol.All(vol.Coerce(float), vol.Range(min=0, max=100)),
                     vol.Optional(CONF_WATER_PRICE, default=water_price): vol.All(
                         vol.Coerce(float), vol.Range(min=0, max=10000)
                     ),
