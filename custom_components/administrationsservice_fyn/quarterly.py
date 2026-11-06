@@ -236,6 +236,13 @@ class QuarterlyCostCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 values[_month_key_from_timestamp(timestamp)] = change
             return values
 
+        first_rows = next(iter(stats.values()), [])
+        if first_rows:
+            _LOGGER.warning(
+                "Quarterly statistic row type=%s repr=%s",
+                type(first_rows[0]),
+                repr(first_rows[0])[:800],
+            )
         water = convert(WATER_TOTAL_STATISTIC_ID)
         if not water and "water" in self.sensors:
             water = convert(statistic_id(self.sensors["water"]))
