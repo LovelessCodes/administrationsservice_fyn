@@ -905,7 +905,7 @@ class ASFDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         """Import statistics in the background so setup is never blocked."""
         if self._statistics_task is not None and not self._statistics_task.done():
             return
-        self._statistics_task = self.hass.async_create_task(
+        self._statistics_task = self.hass.async_create_background_task(
             self._async_import_statistics_logged(sensors),
             f"{DOMAIN} statistics import",
         )
