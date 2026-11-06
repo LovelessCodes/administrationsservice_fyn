@@ -266,10 +266,12 @@ current-month endpoint is updated daily (with a one-day lag), the year endpoint
 monthly, and the physical meter reading monthly or yearly. A manual **Refresh**
 button is available on the integration device.
 
-The long-term statistics import runs during the same refresh. It stores
-electricity hour by hour and the other products day by day, so the statistics
-show when consumption happened instead of when ASFyn published the reading.
-The live sensor state remains the cumulative meter value.
+The long-term statistics import runs in the background after a refresh. It
+stores electricity hour by hour and the other products day by day, so the
+statistics show when consumption happened instead of when ASFyn published the
+reading. The live sensor state remains the cumulative meter value. The first
+backfill can take a few minutes; Diagnostics shows the point count and last
+import time for each statistic once it finishes.
 
 New meters are discovered when the integration starts. If a new product is
 added to your account, reload the integration or restart Home Assistant to
@@ -299,8 +301,10 @@ customer numbers in the ASFyn portal, then reload the integration. See
 The statistics import needs the Home Assistant **Recorder** integration, which
 is enabled by default. Download **Diagnostics** from the integration and check
 the `statistics` section for each sensor's statistic ID, imported point count
-and last import time. If the section is empty, the product did not expose a
-`day` or `month` series, or the API returned no items.
+and last import time. If the section is empty, wait for the background import
+to finish, then check again. If it stays empty, the product did not expose a
+`day` or `month` series, or the API returned no items. The `day_param_kind` and
+`hourly_probe` fields show which query format worked and which day was probed.
 
 The external statistics start with the backfill window; they do not contain
 all history from the entity sensor. Importing the same consumption into both
