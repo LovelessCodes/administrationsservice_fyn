@@ -218,8 +218,13 @@ class QuarterlyCostCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 {"change"},
             )
         except Exception as err:  # noqa: BLE001 - optional history
-            _LOGGER.debug("Could not read water statistics: %s", err)
+            _LOGGER.warning("Could not read water statistics: %s", err)
             return {}, {}
+        _LOGGER.warning(
+            "Quarterly statistics for %s returned %s",
+            statistic_ids,
+            {key: len(value) for key, value in stats.items()},
+        )
 
         def convert(stat_id: str) -> dict[tuple[int, int], float]:
             values: dict[tuple[int, int], float] = {}
