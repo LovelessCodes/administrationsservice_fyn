@@ -54,8 +54,10 @@ def _quarter_end(year: int, quarter: int) -> date:
 
 
 def _month_key_from_timestamp(timestamp: float) -> tuple[int, int]:
-    """Return the local year and month for a millisecond timestamp."""
-    local = dt_util.as_local(datetime.fromtimestamp(timestamp / 1000, tz=timezone.utc))
+    """Return the local year and month for a statistic timestamp."""
+    if timestamp > 100_000_000_000:
+        timestamp /= 1000
+    local = dt_util.as_local(datetime.fromtimestamp(timestamp, tz=timezone.utc))
     return local.year, local.month
 
 
@@ -218,13 +220,8 @@ class QuarterlyCostCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 {"change"},
             )
         except Exception as err:  # noqa: BLE001 - optional history
-            _LOGGER.warning("Could not read water statistics: %s", err)
+            _LOGGER.debug("Could not read water statistics: %s", err)
             return {}, {}
-        _LOGGER.warning(
-            "Quarterly statistics for %s returned %s",
-            statistic_ids,
-            {key: len(value) for key, value in stats.items()},
-        )
 
         def convert(stat_id: str) -> dict[tuple[int, int], float]:
             values: dict[tuple[int, int], float] = {}
@@ -236,13 +233,6 @@ class QuarterlyCostCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 values[_month_key_from_timestamp(timestamp)] = change
             return values
 
-        first_rows = next(iter(stats.values()), [])
-        if first_rows:
-            _LOGGER.warning(
-                "Quarterly statistic row type=%s repr=%s",
-                type(first_rows[0]),
-                repr(first_rows[0])[:800],
-            )
         water = convert(WATER_TOTAL_STATISTIC_ID)
         if not water and "water" in self.sensors:
             water = convert(statistic_id(self.sensors["water"]))
