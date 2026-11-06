@@ -13,7 +13,7 @@
     "custom_components.administrationsservice_fyn"
   ],
   "requirements": [],
-  "version": "1.4.2",
+  "version": "1.4.3",
   "dependencies": [
     "recorder"
   ]

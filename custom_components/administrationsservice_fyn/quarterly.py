@@ -7,6 +7,7 @@ import logging
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, Mapping
 
+from homeassistant.components.recorder import get_instance
 from homeassistant.components.recorder.statistics import statistics_during_period
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
@@ -205,14 +206,16 @@ class QuarterlyCostCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             statistic_ids.add(statistic_id(self.sensors["hot_water"]))
 
         try:
-            stats = await statistics_during_period(
+            recorder = get_instance(self.hass)
+            stats = await recorder.async_add_executor_job(
+                statistics_during_period,
                 self.hass,
                 start,
                 end,
                 statistic_ids,
                 "month",
-                units=None,
-                types={"change"},
+                None,
+                {"change"},
             )
         except Exception as err:  # noqa: BLE001 - optional history
             _LOGGER.debug("Could not read water statistics: %s", err)
