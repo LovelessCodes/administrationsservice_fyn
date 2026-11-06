@@ -23,13 +23,15 @@ sensors.
 - Automatic OAuth refresh-token rotation
 - Lifetime, month-to-date and year-to-date values as attributes
 - Long-term statistics with hourly electricity and daily water/heating values
+- Editable variable tariffs for water and district heating
 - Reauthentication flow when the login expires
 - Configurable polling interval (15 minutes to 24 hours)
 - Manual refresh button
 - Diagnostics download with tokens redacted
 
-Electricity spot prices are **not** included. This integration focuses on
-metered consumption; keep a price integration if you need hourly prices.
+Electricity spot prices are **not** duplicated. The Energi Fyn integration
+already provides an hourly `DKK/kWh` price sensor with a forecast; use that
+sensor for the electricity price.
 
 ## Installation
 
@@ -252,11 +254,36 @@ The sensor state is cumulative consumption. The physical meter reading is the
 `meter_reading` attribute. This means the sensor can update daily even when
 the utility only publishes a new physical meter reading once a month.
 
+## Prices
+
+The integration exposes the **variable** 2026 tariffs, including VAT:
+
+| Sensor | Value | Source | Fixed fees not included |
+| --- | --- | --- | --- |
+| Water price | `65.98 DKK/m³` | [VandCenter Syd](https://www.vandcenter.dk/pris-forbrug/priser/baggrund-for-prisen/) | 600 DKK/year meter fee and 750 DKK wastewater connection |
+| Heating price | `163.75 DKK/GJ` | [Fjernvarme Fyn](https://www.fjernvarmefyn.dk/priser/overblik/forbrugspriser/) | 600 DKK/year meter fee and 12.50 DKK/m²/year effect contribution |
+| Heating water price | `4.50 DKK/m³` | Fjernvarme Fyn price folder | Metered district heating water; the energy price is charged per GJ separately |
+
+The water price is the combined water and wastewater price. The heating price
+is the energy price per GJ; the separate `m³` price applies to the hot-water
+volume sensor. The values are editable under **Configure**, so a tariff change
+does not require a new release. The sensor attributes include the validity
+date, VAT status, source and the fixed fees.
+
+The Energi Fyn integration already provides the electricity price
+(`DKK/kWh`) hour by hour, so this integration does not duplicate it.
+
+To use the tariffs in the **Energy dashboard**, select them as the price
+entities for the water, grid and gas (district heating) sections. Fixed annual
+fees cannot be represented by a per-unit price and are not included in the
+dashboard cost.
+
 ## Options
 
-Open the integration's **Configure** dialog to change the polling interval.
-The default is 60 minutes. Meter readings usually change only a few times per
-day, so polling more often than every 15 minutes is not recommended.
+Open the integration's **Configure** dialog to change the polling interval and
+the variable tariffs. The default polling interval is 60 minutes. Meter
+readings usually change only a few times per day, so polling more often than
+every 15 minutes is not recommended.
 
 ## Data updates
 

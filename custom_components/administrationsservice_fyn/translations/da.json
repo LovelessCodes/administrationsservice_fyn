@@ -32,9 +32,12 @@
     "step": {
       "init": {
         "title": "Indstillinger for Administrationsservice Fyn",
-        "description": "Vælg, hvor ofte forbrugsdata hentes. Måleraflæsninger ændrer sig få gange i døgnet, så timevis opdatering er normalt tilstrækkeligt.",
+        "description": "Vælg, hvor ofte forbrugsdata hentes, og hvilke variable tariffer der skal bruges. Priserne er inklusive moms; faste årlige gebyrer er ikke inkluderet.",
         "data": {
-          "scan_interval": "Opdateringsinterval (minutter)"
+          "scan_interval": "Opdateringsinterval (minutter)",
+          "water_price": "Vandpris (kr./m³)",
+          "heat_price": "Fjernvarmepris (kr./GJ)",
+          "heat_water_price": "Pris for målt fjernvarmevand (kr./m³)"
         }
       }
     }
@@ -55,6 +58,15 @@
       },
       "gas": {
         "name": "Gas"
+      },
+      "water_price": {
+        "name": "Vandpris"
+      },
+      "heat_price": {
+        "name": "Varmepris"
+      },
+      "heat_water_price": {
+        "name": "Pris for målt varmevand"
       }
     },
     "button": {

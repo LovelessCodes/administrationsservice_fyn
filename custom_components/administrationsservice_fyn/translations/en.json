@@ -32,9 +32,12 @@
     "step": {
       "init": {
         "title": "Administrationsservice Fyn options",
-        "description": "Choose how often consumption data is fetched. Meter readings change a few times per day, so hourly updates are usually enough.",
+        "description": "Choose how often consumption data is fetched and which variable tariffs to use. Prices include VAT; fixed annual fees are not included.",
         "data": {
-          "scan_interval": "Update interval (minutes)"
+          "scan_interval": "Update interval (minutes)",
+          "water_price": "Water price (DKK/m³)",
+          "heat_price": "District heating price (DKK/GJ)",
+          "heat_water_price": "District heating water price (DKK/m³)"
         }
       }
     }
@@ -55,6 +58,15 @@
       },
       "gas": {
         "name": "Gas"
+      },
+      "water_price": {
+        "name": "Water price"
+      },
+      "heat_price": {
+        "name": "Heating price"
+      },
+      "heat_water_price": {
+        "name": "Heating water price"
       }
     },
     "button": {

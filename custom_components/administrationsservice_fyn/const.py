@@ -7,7 +7,7 @@ from typing import Final
 
 DOMAIN: Final = "administrationsservice_fyn"
 NAME: Final = "Administrationsservice Fyn"
-VERSION: Final = "1.3.6"
+VERSION: Final = "1.4.0"
 
 # API endpoints
 SELFSERVICE_API_BASE: Final = "https://efselfserviceapi.azurewebsites.net/api"
@@ -25,8 +25,23 @@ CONF_REFRESH_TOKEN: Final = "refresh_token"
 CONF_ACCESS_TOKEN: Final = "access_token"
 CONF_TOKEN_EXPIRES: Final = "token_expires"
 CONF_SCAN_INTERVAL: Final = "scan_interval"
+CONF_WATER_PRICE: Final = "water_price"
+CONF_HEAT_PRICE: Final = "heat_price"
+CONF_HEAT_WATER_PRICE: Final = "heat_water_price"
 
 DEFAULT_SCAN_INTERVAL: Final = 60  # minutes
+# Variable 2026 tariffs including VAT. Fixed annual fees are not included.
+DEFAULT_WATER_PRICE: Final = 65.98  # DKK/m3, VandCenter Syd
+DEFAULT_HEAT_PRICE: Final = 163.75  # DKK/GJ, Fjernvarme Fyn
+DEFAULT_HEAT_WATER_PRICE: Final = 4.50  # DKK/m3, Fjernvarme Fyn
+PRICE_VALID_FROM: Final = "2026-01-01"
+WATER_PRICE_URL: Final = (
+    "https://www.vandcenter.dk/pris-forbrug/priser/baggrund-for-prisen/"
+)
+HEAT_PRICE_URL: Final = "https://www.fjernvarmefyn.dk/priser/overblik/forbrugspriser/"
+HEAT_PRICE_PDF_URL: Final = (
+    "https://www.fjernvarmefyn.dk/media/efafmmg2/fjernvarmepriser_jan_2026.pdf"
+)
 MIN_SCAN_INTERVAL: Final = 15
 MAX_SCAN_INTERVAL: Final = 24 * 60
 TOKEN_REFRESH_MARGIN: Final = 300  # seconds before expiry to refresh
