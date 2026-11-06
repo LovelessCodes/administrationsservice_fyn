@@ -213,6 +213,9 @@ async def async_import_points(
     rows = build_rows(points, start_sum)
 
     async_add_external_statistics(hass, metadata(data), rows)
+    # Wait for the queued import to be committed. Otherwise the next chunk or
+    # the next refresh reads a stale "last sum" and builds a second zero anchor.
+    await get_instance(hass).async_block_till_done()
     _LOGGER.debug(
         "Imported %s %s statistic rows for %s from %s to %s",
         len(rows),

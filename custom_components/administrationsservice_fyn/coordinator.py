@@ -837,12 +837,11 @@ class ASFDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             if not self._supports_daily_statistics(data):
                 continue
 
+            items: list[dict[str, Any]] = []
             for year, month in _month_starts(start, today):
-                items = await self._async_get_month_items(data, year, month)
-                points = asf_statistics.parse_items(
-                    items, start_date=start, end_date=today
-                )
-                await self._async_import_sensor_points(data, points, period="day")
+                items.extend(await self._async_get_month_items(data, year, month))
+            points = asf_statistics.parse_items(items, start_date=start, end_date=today)
+            await self._async_import_sensor_points(data, points, period="day")
 
     async def _async_import_recent_daily_statistics(
         self, sensors: dict[str, dict[str, Any]]
@@ -880,20 +879,20 @@ class ASFDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             # the window and import whichever days are already available.
             targets = [today - timedelta(days=offset) for offset in range(days, 0, -1)]
 
-            imported = 0
+            points: list[tuple[datetime, float]] = []
             for target in targets:
                 items = await self._async_get_day_items(data, target)
-                points = asf_statistics.parse_items(
-                    items,
-                    start_date=target,
-                    end_date=target + timedelta(days=1),
+                points.extend(
+                    asf_statistics.parse_items(
+                        items,
+                        start_date=target,
+                        end_date=target + timedelta(days=1),
+                    )
                 )
-                if not points:
-                    continue
-                await self._async_import_sensor_points(data, points, period="hour")
-                imported += 1
 
-            if not imported:
+            if points:
+                await self._async_import_sensor_points(data, points, period="hour")
+            else:
                 stat_id = asf_statistics.statistic_id(data)
                 self.statistics_status[stat_id] = {
                     "statistic_id": stat_id,
