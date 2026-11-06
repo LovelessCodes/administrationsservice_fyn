@@ -24,6 +24,7 @@ sensors.
 - Lifetime, month-to-date and year-to-date values as attributes
 - Long-term statistics with hourly electricity and daily water/heating values
 - Editable variable tariffs for water and district heating
+- A quarterly cost sensor with actual and projected variable costs
 - Reauthentication flow when the login expires
 - Configurable polling interval (15 minutes to 24 hours)
 - Manual refresh button
@@ -277,6 +278,30 @@ To use the tariffs in the **Energy dashboard**, select them as the price
 entities for the water, grid and gas (district heating) sections. Fixed annual
 fees cannot be represented by a per-unit price and are not included in the
 dashboard cost.
+
+## Quarterly costs
+
+Each estate gets a **Quarterly cost** sensor. Its state is the projected
+variable cost for the current quarter in DKK. The `quarters` attribute is a
+list of the last three years of quarters, with per-product costs, consumption,
+status (`actual` or `projected`) and a `partial` flag. The sensor also exposes
+`current_quarter`, `current_quarter_to_date`, `current_quarter_projected`,
+`annual_forecast` and the `tariffs` used.
+
+Electricity and district-heating consumption comes from the ASFyn year
+endpoint. Water and hot-water consumption comes from Home Assistant recorder
+statistics, so those products are only available from the date their
+statistics begin; earlier quarters have `partial: true`. Completed quarters use
+actual consumption. The current quarter is projected from the electricity and
+heating run rate; water and hot water use the previous quarter as a seasonal
+proxy because their meter data lags. Missing water and hot-water values in the
+current year's annual estimate are filled from the latest complete quarter.
+
+The electricity price used for the estimate is configurable under
+**Configure**; its default is `3.19 DKK/kWh`. Fixed annual fees are excluded,
+as with the price sensors. The reference dashboard is a separate
+**Energy costs** dashboard at `/energy-costs` and charts the `quarters`
+attribute with ApexCharts; it is not part of the integration installation.
 
 ## Options
 

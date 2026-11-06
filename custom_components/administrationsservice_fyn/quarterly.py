@@ -173,11 +173,7 @@ class QuarterlyCostCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 self.options.get(CONF_HEAT_WATER_PRICE, DEFAULT_HEAT_WATER_PRICE)
             ),
         }
-        annual = sum(
-            item["total"]
-            for item in quarters
-            if item["year"] == current_year and item["total"] is not None
-        )
+        annual = self._annual_forecast(quarters, current_year)
         return {
             "quarters": quarters,
             "current_quarter": current["label"] if current else None,
@@ -197,7 +193,8 @@ class QuarterlyCostCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "method": (
                 "Variable costs at current tariffs. Electricity uses the configured "
                 "average price; the current quarter is projected from the run rate. "
-                "Fixed annual fees are not included."
+                "Missing water and hot-water values are filled from the latest complete "
+                "quarter in the annual estimate. Fixed annual fees are not included."
             ),
             "updated": now.isoformat(),
         }
@@ -347,6 +344,32 @@ class QuarterlyCostCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     }
                 )
         return quarters
+
+    @staticmethod
+    def _annual_forecast(quarters: list[dict[str, Any]], current_year: int) -> float:
+        """Estimate the current year's variable cost.
+
+        Water and hot-water history starts later than electricity and heating, so
+        missing current-year values are filled from the latest complete quarter.
+        """
+        current = [item for item in quarters if item["year"] == current_year]
+        latest = next(
+            (
+                item
+                for item in reversed(current)
+                if item["water"] is not None and item["hot_water"] is not None
+            ),
+            None,
+        )
+        total = 0.0
+        for item in current:
+            total += item["total"] or 0.0
+            if latest is not None:
+                if item["water"] is None:
+                    total += latest["water"]
+                if item["hot_water"] is None:
+                    total += latest["hot_water"]
+        return round(total, 2)
 
     def _current_values(
         self,
