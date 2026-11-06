@@ -236,6 +236,7 @@ class ASFDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         )
         self.entry = entry
         self.statistics_status: dict[str, dict[str, Any]] = {}
+        self.hourly_probe: list[dict[str, Any]] = []
         self._statistics_initialized = False
         self._day_param_kind: str | None = None
         self.api = ASFApiClient(
@@ -693,14 +694,24 @@ class ASFDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
     @staticmethod
     def _items_match_date(items: list[dict[str, Any]], target: date) -> bool:
-        """Return True if every item belongs to the requested date."""
+        """Return True if the response contains the requested local date."""
         if not items:
             return False
-        for item in items:
-            parsed = asf_statistics.parse_local_datetime(item.get("date"))
-            if parsed is None or parsed.date() != target:
-                return False
-        return True
+        dates = sorted(
+            {
+                parsed.date()
+                for item in items
+                if (parsed := asf_statistics.parse_local_datetime(item.get("date")))
+            }
+        )
+        if target not in dates:
+            return False
+        # A daily or hourly response may include a UTC boundary at either end,
+        # but a monthly response spans many more days.
+        return dates[0] in (target - timedelta(days=1), target) and dates[-1] in (
+            target,
+            target + timedelta(days=1),
+        )
 
     async def _async_get_day_items(
         self,
@@ -712,17 +723,34 @@ class ASFDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if target >= today:
             return []
 
+        self.hourly_probe = []
+
+        def record(
+            kind: str, params: dict[str, Any] | None, items: list[dict[str, Any]]
+        ) -> None:
+            self.hourly_probe.append(
+                {
+                    "kind": kind,
+                    "params": params,
+                    "count": len(items),
+                    "first": items[0].get("date") if items else None,
+                    "last": items[-1].get("date") if items else None,
+                    "match": self._items_match_date(items, target),
+                }
+            )
+
         kind = self._day_param_kind
         if kind == "none":
             if target != today - timedelta(days=1):
                 return []
             items = await self._async_get_items(data, "day", None)
+            record("none", None, items)
             return items if self._items_match_date(items, target) else []
 
         if kind is not None:
-            items = await self._async_get_items(
-                data, "day", self._day_params(target, kind)
-            )
+            params = self._day_params(target, kind)
+            items = await self._async_get_items(data, "day", params)
+            record(kind, params, items)
             if self._items_match_date(items, target):
                 return items
             if target == today - timedelta(days=1):
@@ -731,9 +759,9 @@ class ASFDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             return []
 
         for candidate in ("iso", "iso_time", "day_number"):
-            items = await self._async_get_items(
-                data, "day", self._day_params(target, candidate)
-            )
+            params = self._day_params(target, candidate)
+            items = await self._async_get_items(data, "day", params)
+            record(candidate, params, items)
             if self._items_match_date(items, target):
                 self._day_param_kind = candidate
                 return items
@@ -741,6 +769,7 @@ class ASFDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # The portal defaults to yesterday when no date is supplied.
         if target == today - timedelta(days=1):
             items = await self._async_get_items(data, "day", None)
+            record("none", None, items)
             if self._items_match_date(items, target):
                 self._day_param_kind = "none"
                 return items
@@ -864,6 +893,18 @@ class ASFDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     start_date=target,
                     end_date=target + timedelta(days=1),
                 )
+                if not points and target == yesterday:
+                    stat_id = asf_statistics.statistic_id(data)
+                    self.statistics_status[stat_id] = {
+                        "statistic_id": stat_id,
+                        "name": asf_statistics.metadata(data).get("name"),
+                        "unit": data.get("unit"),
+                        "error": "No hourly points returned for yesterday",
+                        "day_param_kind": self._day_param_kind,
+                        "day_probe": self.hourly_probe,
+                        "last_import": dt_util.utcnow().isoformat(),
+                    }
+                    continue
                 await self._async_import_sensor_points(data, points, period="hour")
 
     async def _async_import_statistics(

@@ -117,7 +117,7 @@ def parse_local_datetime(value: Any) -> datetime | None:
 
     if parsed.tzinfo is None:
         parsed = parsed.replace(tzinfo=dt_util.DEFAULT_TIME_ZONE)
-    return parsed
+    return dt_util.as_local(parsed)
 
 
 def parse_items(

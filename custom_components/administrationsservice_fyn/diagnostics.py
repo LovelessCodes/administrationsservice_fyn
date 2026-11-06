@@ -52,6 +52,8 @@ async def async_get_config_entry_diagnostics(
             "options": dict(entry.options),
         },
         "coordinator": {
+            "day_param_kind": coordinator._day_param_kind,
+            "hourly_probe": coordinator.hourly_probe,
             "last_update_success": coordinator.last_update_success,
             "last_exception": (
                 repr(coordinator.last_exception) if coordinator.last_exception else None
