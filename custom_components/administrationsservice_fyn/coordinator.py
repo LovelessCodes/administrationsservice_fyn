@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
@@ -238,6 +239,7 @@ class ASFDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self.statistics_status: dict[str, dict[str, Any]] = {}
         self.hourly_probe: list[dict[str, Any]] = []
         self._statistics_initialized = False
+        self._statistics_task: asyncio.Task[None] | None = None
         self._day_param_kind: str | None = None
         self.api = ASFApiClient(
             async_get_clientsession(hass),
@@ -442,12 +444,7 @@ class ASFDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "on this account."
             )
 
-        try:
-            await self._async_import_statistics(sensors)
-        except ASFAuthError:
-            raise
-        except Exception as err:  # noqa: BLE001 - statistics must not break sensors
-            _LOGGER.warning("Could not import ASF long-term statistics: %s", err)
+        self._schedule_statistics_import(sensors)
 
         return {
             "sensors": sensors,
@@ -903,6 +900,32 @@ class ASFDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     "day_probe": self.hourly_probe,
                     "last_import": dt_util.utcnow().isoformat(),
                 }
+
+    def _schedule_statistics_import(self, sensors: dict[str, dict[str, Any]]) -> None:
+        """Import statistics in the background so setup is never blocked."""
+        if self._statistics_task is not None and not self._statistics_task.done():
+            return
+        self._statistics_task = self.hass.async_create_task(
+            self._async_import_statistics_logged(sensors),
+            f"{DOMAIN} statistics import",
+        )
+
+    async def _async_import_statistics_logged(
+        self, sensors: dict[str, dict[str, Any]]
+    ) -> None:
+        """Run the statistics import and log failures without breaking sensors."""
+        try:
+            await self._async_import_statistics(sensors)
+        except ASFAuthError:
+            _LOGGER.debug("Statistics import skipped after authentication error")
+        except Exception as err:  # noqa: BLE001 - statistics must not break sensors
+            _LOGGER.warning("Could not import ASF long-term statistics: %s", err)
+
+    async def async_shutdown(self) -> None:
+        """Cancel a pending statistics import."""
+        if self._statistics_task is not None and not self._statistics_task.done():
+            self._statistics_task.cancel()
+        await super().async_shutdown()
 
     async def _async_import_statistics(
         self, sensors: dict[str, dict[str, Any]]

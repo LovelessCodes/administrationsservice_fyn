@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import re
 from collections.abc import Iterable, Mapping, Sequence
+from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from typing import Any, Literal, cast
 
@@ -19,6 +21,7 @@ from homeassistant.components.recorder.statistics import (
     get_last_statistics,
     statistics_during_period,
 )
+from homeassistant.components.recorder.tasks import RecorderTask
 from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
 from homeassistant.util.unit_conversion import EnergyConverter, VolumeConverter
@@ -197,6 +200,31 @@ async def async_get_sum_before(
     return float(previous[-1]["sum"] or 0.0)
 
 
+@dataclass(slots=True)
+class _WaitForCommitTask(RecorderTask):
+    """Signal the event loop after the preceding recorder tasks committed."""
+
+    future: asyncio.Future[None]
+
+    def run(self, instance: Any) -> None:
+        """Set the future from the recorder thread."""
+        instance.hass.loop.call_soon_threadsafe(_set_future, self.future)
+
+
+def _set_future(future: asyncio.Future[None]) -> None:
+    """Set a future if it is still pending."""
+    if not future.done():
+        future.set_result(None)
+
+
+async def async_wait_for_recorder(hass: HomeAssistant) -> None:
+    """Wait until queued recorder work, including an import, is committed."""
+    recorder = get_instance(hass)
+    future = hass.loop.create_future()
+    recorder.queue_task(_WaitForCommitTask(future))
+    await future
+
+
 async def async_import_points(
     hass: HomeAssistant,
     data: Mapping[str, Any],
@@ -215,7 +243,7 @@ async def async_import_points(
     async_add_external_statistics(hass, metadata(data), rows)
     # Wait for the queued import to be committed. Otherwise the next chunk or
     # the next refresh reads a stale "last sum" and builds a second zero anchor.
-    await get_instance(hass).async_block_till_done()
+    await async_wait_for_recorder(hass)
     _LOGGER.debug(
         "Imported %s %s statistic rows for %s from %s to %s",
         len(rows),
