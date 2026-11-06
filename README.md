@@ -210,9 +210,11 @@ triggers.
 
 On every refresh the integration re-imports the most recent days, so late or
 corrected meter values replace the earlier rows. The first setup backfills the
-periods in the table above. The hourly electricity date format is discovered
-automatically; if ASFyn only exposes yesterday's hourly series, the hourly
-statistic starts with yesterday and grows from there.
+periods in the table above. ASFyn publishes a day with a delay and returns
+HTTP 500 for a day that is not available yet, so the hourly import scans the
+whole window and imports every day that is already published. Yesterday may
+therefore be missing until ASFyn publishes it; the next refresh fills it in.
+The hourly electricity date parameters are discovered automatically.
 
 To use these series in the **Energy dashboard**, replace the existing source
 with the matching statistic rather than adding both. Adding both the source
